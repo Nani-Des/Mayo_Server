@@ -1,0 +1,434 @@
+openapi: 3.0.0
+info:
+  title: Notification Service API
+  version: 1.0.0
+  description: API for sending and managing notifications in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/v1/notifications/send:
+    post:
+      summary: Send a notification
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendNotificationRequest'
+      responses:
+        '200':
+          description: Notification sent successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseNotificationResponse'
+  /api/v1/notifications/schedule:
+    post:
+      summary: Schedule a notification for future delivery
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendNotificationRequest'
+      responses:
+        '200':
+          description: Notification scheduled successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseNotificationResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+  /api/v1/notifications/{id}/status:
+    get:
+      summary: Get notification delivery status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Notification status retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseNotificationResponse'
+  /api/v1/notifications/history/{userId}:
+    get:
+      summary: Get notification history for a user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Notification history retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListNotificationResponse'
+  /api/v1/notifications/preferences/{userId}:
+    get:
+      summary: Get user notification preferences
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User preferences retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListUserPreferencesDto'
+    put:
+      summary: Update user notification preferences
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserPreferencesDto'
+      responses:
+        '200':
+          description: Preferences updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUserPreferencesDto'
+  /api/v1/notifications/preferences/{userId}/channels:
+    post:
+      summary: Add device channel for user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceChannelDto'
+      responses:
+        '200':
+          description: Device channel added
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseString'
+  /api/v1/notifications/preferences/{userId}/channels/{channelType}:
+    delete:
+      summary: Remove device channel for user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: channelType
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device channel removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseString'
+components:
+  schemas:
+    SendNotificationRequest:
+      type: object
+      required:
+        - userId
+        - type
+        - title
+        - message
+        - priority
+      properties:
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        templateId:
+          type: string
+        templateData:
+          type: object
+          additionalProperties:
+            type: string
+        priority:
+          $ref: '#/components/schemas/NotificationPriority'
+        channels:
+          type: array
+          items:
+            type: string
+        scheduledAt:
+          type: string
+          format: date-time
+    NotificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        templateId:
+          type: string
+        templateData:
+          type: object
+          additionalProperties:
+            type: string
+        priority:
+          $ref: '#/components/schemas/NotificationPriority'
+        status:
+          $ref: '#/components/schemas/NotificationStatus'
+        scheduledAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        sentAt:
+          type: string
+          format: date-time
+        deliveredAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+    NotificationEvent:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        type:
+          type: string
+        title:
+          type: string
+        message:
+          type: string
+        templateId:
+          type: string
+        templateData:
+          type: object
+          additionalProperties:
+            type: string
+        priority:
+          type: string
+        channels:
+          type: array
+          items:
+            type: string
+        scheduledAt:
+          type: string
+        metadata:
+          type: object
+    UserPreferencesDto:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        notificationType:
+          type: string
+        pushEnabled:
+          type: boolean
+        emailEnabled:
+          type: boolean
+        smsEnabled:
+          type: boolean
+        emailAddress:
+          type: string
+        phoneNumber:
+          type: string
+        timezone:
+          type: string
+        language:
+          type: string
+        quietHoursEnabled:
+          type: boolean
+        quietHoursStart:
+          type: string
+          format: time
+        quietHoursEnd:
+          type: string
+          format: time
+        channels:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceChannelDto'
+    DeviceChannelDto:
+      type: object
+      properties:
+        type:
+          type: string
+        token:
+          type: string
+    ApiResponseNotificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/NotificationResponse'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListNotificationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/NotificationResponse'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListUserPreferencesDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UserPreferencesDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseUserPreferencesDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/UserPreferencesDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseString:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseVoid:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    NotificationPriority:
+      type: string
+      enum: [LOW, NORMAL, HIGH, URGENT]
+    NotificationStatus:
+      type: string
+      enum: [PENDING, SENDING, SENT, DELIVERED, SEND_FAILED, DELIVERY_FAILED, CANCELLED]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

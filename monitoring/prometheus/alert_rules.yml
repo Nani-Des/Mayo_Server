@@ -1,0 +1,223 @@
+groups:
+  - name: emr_service_alerts
+    rules:
+      - alert: EMRServiceDown
+        expr: up{job=~"gateway|auth-service|patient-record-service|sync-service|audit-service|notification-service|hospital-integration-service"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          service: "{{ $labels.job }}"
+        annotations:
+          summary: "EMR Service {{ $labels.job }} is down"
+          description: "EMR Service {{ $labels.job }} has been down for more than 5 minutes."
+
+      - alert: EMRServiceHighCPU
+        expr: rate(container_cpu_usage_seconds_total{pod=~".*"}[5m]) / container_spec_cpu_quota * 100 > 80
+        for: 10m
+        labels:
+          severity: warning
+          service: "{{ $labels.pod }}"
+        annotations:
+          summary: "High CPU usage on {{ $labels.pod }}"
+          description: "CPU usage is {{ $value }}% for pod {{ $labels.pod }}"
+
+      - alert: EMRServiceHighMemory
+        expr: container_memory_usage_bytes{pod=~".*"} / container_spec_memory_limit_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          service: "{{ $labels.pod }}"
+        annotations:
+          summary: "High memory usage on {{ $labels.pod }}"
+          description: "Memory usage is {{ $value }}% for pod {{ $labels.pod }}"
+
+      - alert: EMRServiceRestarting
+        expr: increase(kube_pod_container_status_restarts_total[10m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+          service: "{{ $labels.pod }}"
+        annotations:
+          summary: "Pod {{ $labels.pod }} is restarting"
+          description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 10 minutes"
+
+  - name: security_alerts
+    rules:
+      - alert: HighFailedLoginAttempts
+        expr: rate(failed_login_attempts_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of failed login attempts"
+          description: "Rate of failed login attempts is {{ $value }} per second"
+
+      - alert: WAFHighBlockedRequests
+        expr: rate(waf_blocked_requests_total[5m]) > 50
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of WAF blocked requests"
+          description: "Rate of WAF blocked requests is {{ $value }} per second"
+
+      - alert: CertificateExpiryWarning
+        expr: certificate_expiry_days < 30
+        for: 24h
+        labels:
+          severity: warning
+          certificate: "{{ $labels.certificate_name }}"
+        annotations:
+          summary: "Certificate {{ $labels.certificate_name }} expires soon"
+          description: "Certificate {{ $labels.certificate_name }} expires in {{ $value }} days"
+
+      - alert: CertificateExpiryCritical
+        expr: certificate_expiry_days < 7
+        for: 1h
+        labels:
+          severity: critical
+          certificate: "{{ $labels.certificate_name }}"
+        annotations:
+          summary: "Certificate {{ $labels.certificate_name }} expires very soon"
+          description: "Certificate {{ $labels.certificate_name }} expires in {{ $value }} days"
+
+      - alert: ComplianceViolation
+        expr: increase(compliance_violations_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+          violation_type: "{{ $labels.violation_type }}"
+        annotations:
+          summary: "Compliance violation detected"
+          description: "Compliance violation of type {{ $labels.violation_type }} detected"
+
+  - name: infrastructure_alerts
+    rules:
+      - alert: NodeDown
+        expr: up{job="kubernetes-nodes"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          node: "{{ $labels.kubernetes_node_name }}"
+        annotations:
+          summary: "Kubernetes node {{ $labels.kubernetes_node_name }} is down"
+          description: "Kubernetes node {{ $labels.kubernetes_node_name }} has been down for more than 5 minutes"
+
+      - alert: NodeHighCPU
+        expr: rate(container_cpu_usage_seconds_total{container=""}[5m]) / container_spec_cpu_quota * 100 > 90
+        for: 10m
+        labels:
+          severity: warning
+          node: "{{ $labels.kubernetes_node_name }}"
+        annotations:
+          summary: "High CPU usage on node {{ $labels.kubernetes_node_name }}"
+          description: "CPU usage is {{ $value }}% on node {{ $labels.kubernetes_node_name }}"
+
+      - alert: NodeHighMemory
+        expr: container_memory_usage_bytes{container=""} / container_spec_memory_limit_bytes * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+          node: "{{ $labels.kubernetes_node_name }}"
+        annotations:
+          summary: "High memory usage on node {{ $labels.kubernetes_node_name }}"
+          description: "Memory usage is {{ $value }}% on node {{ $labels.kubernetes_node_name }}"
+
+      - alert: DiskSpaceLow
+        expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          mountpoint: "{{ $labels.mountpoint }}"
+        annotations:
+          summary: "Low disk space on {{ $labels.mountpoint }}"
+          description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}"
+
+  - name: database_alerts
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgresql"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL has been down for more than 5 minutes"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_activity_count > 100
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of PostgreSQL connections"
+          description: "PostgreSQL has {{ $value }} active connections"
+
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis is down"
+          description: "Redis has been down for more than 5 minutes"
+
+      - alert: RedisHighMemoryUsage
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Redis memory usage"
+          description: "Redis memory usage is {{ $value }}%"
+
+  - name: messaging_alerts
+    rules:
+      - alert: KafkaDown
+        expr: up{job="kafka"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kafka is down"
+          description: "Kafka has been down for more than 5 minutes"
+
+      - alert: KafkaHighLag
+        expr: kafka_consumergroup_lag > 1000
+        for: 5m
+        labels:
+          severity: warning
+          consumer_group: "{{ $labels.consumergroup }}"
+          topic: "{{ $labels.topic }}"
+        annotations:
+          summary: "High Kafka consumer lag"
+          description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} for topic {{ $labels.topic }}"
+
+  - name: logging_alerts
+    rules:
+      - alert: ElasticsearchDown
+        expr: up{job="elasticsearch"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Elasticsearch is down"
+          description: "Elasticsearch has been down for more than 5 minutes"
+
+      - alert: ElasticsearchHighCPU
+        expr: rate(elasticsearch_process_cpu_percent[5m]) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High Elasticsearch CPU usage"
+          description: "Elasticsearch CPU usage is {{ $value }}%"
+
+      - alert: ElasticsearchLowDiskSpace
+        expr: elasticsearch_filesystem_data_available_bytes / elasticsearch_filesystem_data_size_bytes * 100 < 15
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space in Elasticsearch"
+          description: "Elasticsearch data disk space is {{ $value }}% available"

@@ -1,0 +1,542 @@
+openapi: 3.0.0
+info:
+  title: Hospital Integration Service API
+  version: 1.0.0
+  description: API for hospital registration and device integration in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/v1/hospitals:
+    get:
+      summary: Get all hospitals
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of hospitals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListHospitalDto'
+    post:
+      summary: Create new hospital
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HospitalDto'
+      responses:
+        '201':
+          description: Hospital created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDto'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+  /api/v1/hospitals/{id}:
+    get:
+      summary: Get hospital by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Hospital found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDto'
+        '404':
+          description: Hospital not found
+    put:
+      summary: Update hospital
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HospitalDto'
+      responses:
+        '200':
+          description: Hospital updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDto'
+        '404':
+          description: Hospital not found
+    delete:
+      summary: Delete hospital
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Hospital deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+        '404':
+          description: Hospital not found
+  /api/v1/hospitals/by-hospital-id/{hospitalId}:
+    get:
+      summary: Get hospital by hospital ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: hospitalId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Hospital found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDto'
+        '404':
+          description: Hospital not found
+  /api/v1/hospitals/status/{status}:
+    get:
+      summary: Get hospitals by status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: path
+          required: true
+          schema:
+            $ref: '#/components/schemas/HospitalStatus'
+      responses:
+        '200':
+          description: Hospitals with status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListHospitalDto'
+  /api/v1/hospitals/integration-enabled:
+    get:
+      summary: Get hospitals with integration enabled
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Integration enabled hospitals
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListHospitalDto'
+  /api/v1/devices/register:
+    post:
+      summary: Register a new hospital device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HospitalDeviceDto'
+      responses:
+        '201':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDeviceDto'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+  /api/v1/devices/{deviceId}:
+    get:
+      summary: Get device by device ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDeviceDto'
+        '404':
+          description: Device not found
+  /api/v1/devices/{deviceId}/status:
+    put:
+      summary: Update device status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: status
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/HospitalDeviceStatus'
+      responses:
+        '200':
+          description: Device status updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseHospitalDeviceDto'
+        '404':
+          description: Device not found
+  /api/v1/devices/{deviceId}/heartbeat:
+    post:
+      summary: Update device heartbeat
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Heartbeat updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+components:
+  schemas:
+    HospitalDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        hospitalId:
+          type: string
+        name:
+          type: string
+        address:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postalCode:
+          type: string
+        phone:
+          type: string
+        email:
+          type: string
+        website:
+          type: string
+        status:
+          $ref: '#/components/schemas/HospitalStatus'
+        integrationEnabled:
+          type: boolean
+        apiEndpoint:
+          type: string
+        supportedDataTypes:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    HospitalDeviceDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+        hospitalId:
+          type: string
+          format: uuid
+        hospitalName:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        deviceName:
+          type: string
+        manufacturer:
+          type: string
+        model:
+          type: string
+        serialNumber:
+          type: string
+        firmwareVersion:
+          type: string
+        ipAddress:
+          type: string
+        macAddress:
+          type: string
+        connectionType:
+          $ref: '#/components/schemas/ConnectionType'
+        status:
+          $ref: '#/components/schemas/HospitalDeviceStatus'
+        supportedProtocols:
+          type: string
+        supportedDataFormats:
+          type: string
+        lastHeartbeat:
+          type: string
+          format: date-time
+        registeredAt:
+          type: string
+          format: date-time
+        lastActiveAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ActivityDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        hospitalId:
+          type: string
+          format: uuid
+        hospitalName:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+        deviceName:
+          type: string
+        activityType:
+          $ref: '#/components/schemas/ActivityType'
+        activityDescription:
+          type: string
+        userId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        recordId:
+          type: string
+        recordType:
+          $ref: '#/components/schemas/RecordType'
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+        metadata:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+    DataTransferSessionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+        hospitalId:
+          type: string
+          format: uuid
+        hospitalName:
+          type: string
+        deviceId:
+          type: string
+          format: uuid
+        deviceName:
+          type: string
+        transferType:
+          $ref: '#/components/schemas/TransferType'
+        dataType:
+          $ref: '#/components/schemas/DataType'
+        protocol:
+          $ref: '#/components/schemas/TransferProtocol'
+        status:
+          $ref: '#/components/schemas/TransferStatus'
+        totalRecords:
+          type: integer
+          format: int64
+        processedRecords:
+          type: integer
+          format: int64
+        failedRecords:
+          type: integer
+          format: int64
+        dataSizeBytes:
+          type: integer
+          format: int64
+        transferredBytes:
+          type: integer
+          format: int64
+        sourceEndpoint:
+          type: string
+        destinationEndpoint:
+          type: string
+        initiatedBy:
+          type: string
+          format: uuid
+        errorMessage:
+          type: string
+        metadata:
+          type: string
+        startedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApiResponseHospitalDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/HospitalDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListHospitalDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/HospitalDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseHospitalDeviceDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/HospitalDeviceDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseVoid:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    HospitalStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, SUSPENDED, PENDING_VERIFICATION]
+    DeviceType:
+      type: string
+      enum: [MOBILE, DESKTOP, TABLET]
+    ConnectionType:
+      type: string
+      enum: [ETHERNET, WIFI, BLUETOOTH, USB, SERIAL, API]
+    HospitalDeviceStatus:
+      type: string
+      enum: [REGISTERED, ACTIVE, INACTIVE, MAINTENANCE, DECOMMISSIONED, ERROR]
+    ActivityType:
+      type: string
+      enum: [DEVICE_REGISTRATION, DEVICE_HEARTBEAT, DEVICE_STATUS_CHANGE, DEVICE_MAINTENANCE, DATA_TRANSFER_INITIATED, DATA_TRANSFER_COMPLETED, DATA_TRANSFER_FAILED, DATA_TRANSFER_CANCELLED, ACCESS_REQUESTED, ACCESS_GRANTED, ACCESS_DENIED, ACCESS_REVOKED, PRESCRIPTION_CREATED, PRESCRIPTION_UPDATED, PRESCRIPTION_DELETED, PRESCRIPTION_ACCESSED, DIAGNOSIS_CREATED, DIAGNOSIS_UPDATED, DIAGNOSIS_DELETED, DIAGNOSIS_ACCESSED, LOGIN_SUCCESS, LOGIN_FAILED, LOGOUT, SESSION_EXPIRED, SYSTEM_MAINTENANCE, CONFIGURATION_CHANGE, ERROR_OCCURRED]
+    RecordType:
+      type: string
+      enum: [PRESCRIPTION, DIAGNOSIS, LAB_RESULT, IMAGING, TREATMENT, MEDICATION, ALLERGY, VITAL_SIGN, PATIENT_RECORD]
+    TransferType:
+      type: string
+      enum: [PULL, PUSH, SYNC]
+    DataType:
+      type: string
+      enum: [PRESCRIPTION, DIAGNOSIS, LAB_RESULT, IMAGING, TREATMENT, MEDICATION, ALLERGY, VITAL_SIGN, PATIENT_RECORD, BULK_DATA]
+    TransferProtocol:
+      type: string
+      enum: [HL7, FHIR, DICOM, REST_API, SOAP, SFTP, HTTPS, WEBSOCKET]
+    TransferStatus:
+      type: string
+      enum: [INITIATED, CONNECTING, TRANSFERRING, PAUSED, COMPLETED, FAILED, CANCELLED, TIMEOUT]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

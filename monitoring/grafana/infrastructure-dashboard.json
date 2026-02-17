@@ -1,0 +1,249 @@
+{
+    "dashboard": {
+        "title": "EMR Infrastructure Monitoring Dashboard",
+        "tags": [
+            "emr",
+            "infrastructure",
+            "kubernetes"
+        ],
+        "timezone": "UTC",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Cluster Overview",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "count(up{job=\"kubernetes-nodes\"})",
+                        "legendFormat": "Total Nodes"
+                    },
+                    {
+                        "expr": "count(up{job=\"kubernetes-pods\"})",
+                        "legendFormat": "Total Pods"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Node CPU Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(container_cpu_usage_seconds_total{container=\"\"}[5m]) / container_spec_cpu_quota * 100",
+                        "legendFormat": "CPU Usage % - {{kubernetes_node_name}}"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Node Memory Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "container_memory_usage_bytes{container=\"\"} / container_spec_memory_limit_bytes * 100",
+                        "legendFormat": "Memory Usage % - {{kubernetes_node_name}}"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "Pod CPU Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(container_cpu_usage_seconds_total{pod=~\".*\"}[5m]) / container_spec_cpu_quota * 100",
+                        "legendFormat": "CPU Usage % - {{pod}}"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Pod Memory Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "container_memory_usage_bytes{pod=~\".*\"} / container_spec_memory_limit_bytes * 100",
+                        "legendFormat": "Memory Usage % - {{pod}}"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "Network I/O",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(container_network_receive_bytes_total[5m])",
+                        "legendFormat": "Network In - {{pod}}"
+                    },
+                    {
+                        "expr": "rate(container_network_transmit_bytes_total[5m])",
+                        "legendFormat": "Network Out - {{pod}}"
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "title": "Disk I/O",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(container_fs_reads_bytes_total[5m])",
+                        "legendFormat": "Disk Read - {{pod}}"
+                    },
+                    {
+                        "expr": "rate(container_fs_writes_bytes_total[5m])",
+                        "legendFormat": "Disk Write - {{pod}}"
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "title": "PostgreSQL Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "pg_stat_activity_count",
+                        "legendFormat": "Active Connections"
+                    },
+                    {
+                        "expr": "rate(pg_stat_database_tup_fetched[5m])",
+                        "legendFormat": "Rows Fetched"
+                    },
+                    {
+                        "expr": "rate(pg_stat_database_tup_inserted[5m])",
+                        "legendFormat": "Rows Inserted"
+                    }
+                ]
+            },
+            {
+                "id": 9,
+                "title": "Redis Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "redis_connected_clients",
+                        "legendFormat": "Connected Clients"
+                    },
+                    {
+                        "expr": "redis_memory_used_bytes / redis_memory_max_bytes * 100",
+                        "legendFormat": "Memory Usage %"
+                    },
+                    {
+                        "expr": "rate(redis_keyspace_hits_total[5m]) / (rate(redis_keyspace_hits_total[5m]) + rate(redis_keyspace_misses_total[5m])) * 100",
+                        "legendFormat": "Cache Hit Rate %"
+                    }
+                ]
+            },
+            {
+                "id": 10,
+                "title": "Kafka Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "kafka_server_brokertopicmetrics_messages_in_total",
+                        "legendFormat": "Messages In"
+                    },
+                    {
+                        "expr": "kafka_server_brokertopicmetrics_bytes_in_total",
+                        "legendFormat": "Bytes In"
+                    },
+                    {
+                        "expr": "kafka_server_brokertopicmetrics_bytes_out_total",
+                        "legendFormat": "Bytes Out"
+                    }
+                ]
+            },
+            {
+                "id": 11,
+                "title": "Elasticsearch Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "elasticsearch_indices_search_query_total",
+                        "legendFormat": "Search Queries"
+                    },
+                    {
+                        "expr": "elasticsearch_indices_indexing_index_total",
+                        "legendFormat": "Indexing Operations"
+                    },
+                    {
+                        "expr": "elasticsearch_jvm_memory_used_bytes{area=\"heap\"} / elasticsearch_jvm_memory_max_bytes{area=\"heap\"} * 100",
+                        "legendFormat": "Heap Usage %"
+                    }
+                ]
+            },
+            {
+                "id": 12,
+                "title": "Pod Restarts",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "kube_pod_container_status_restarts_total",
+                        "legendFormat": "{{pod}} - {{container}}"
+                    }
+                ]
+            },
+            {
+                "id": 13,
+                "title": "Persistent Volume Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes * 100",
+                        "legendFormat": "PV Usage % - {{persistentvolumeclaim}}"
+                    }
+                ]
+            },
+            {
+                "id": 14,
+                "title": "API Server Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "apiserver_request_total",
+                        "legendFormat": "API Requests - {{verb}}"
+                    },
+                    {
+                        "expr": "apiserver_request_duration_seconds{quantile=\"0.95\"}",
+                        "legendFormat": "95th percentile response time"
+                    }
+                ]
+            },
+            {
+                "id": 15,
+                "title": "Ingress Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(nginx_ingress_controller_requests[5m])",
+                        "legendFormat": "Requests per second"
+                    },
+                    {
+                        "expr": "nginx_ingress_controller_request_duration_seconds{quantile=\"0.95\"}",
+                        "legendFormat": "95th percentile response time"
+                    }
+                ]
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "templating": {
+            "list": [
+                {
+                    "name": "namespace",
+                    "query": "label_values(namespace)",
+                    "type": "query"
+                },
+                {
+                    "name": "node",
+                    "query": "label_values(kubernetes_node_name)",
+                    "type": "query"
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,158 @@
+# Kibana configuration for EMR monitoring
+server.name: kibana
+server.host: "0.0.0.0"
+server.port: 5601
+
+# Elasticsearch settings
+elasticsearch.hosts: ["https://elasticsearch:9200"]
+elasticsearch.username: "${ELASTICSEARCH_USER}"
+elasticsearch.password: "${ELASTICSEARCH_PASSWORD}"
+elasticsearch.ssl.verificationMode: certificate
+elasticsearch.ssl.certificateAuthorities: ["/usr/share/kibana/config/certs/ca.crt"]
+
+# Security settings
+xpack.security.enabled: true
+xpack.security.encryptionKey: "${KIBANA_ENCRYPTION_KEY}"
+xpack.security.session.idleTimeout: "1h"
+xpack.security.session.lifespan: "24h"
+
+# SSL/TLS settings
+server.ssl.enabled: true
+server.ssl.certificate: "/usr/share/kibana/config/certs/kibana.crt"
+server.ssl.key: "/usr/share/kibana/config/certs/kibana.key"
+server.ssl.certificateAuthorities: ["/usr/share/kibana/config/certs/ca.crt"
+
+# Logging
+logging:
+  appenders:
+    file:
+      type: file
+      fileName: /usr/share/kibana/logs/kibana.log
+      layout:
+        type: pattern
+        pattern: "[%date][%level][%logger] %message"
+  root:
+    appenders: [file]
+    level: info
+
+# Monitoring
+xpack.monitoring.enabled: true
+xpack.monitoring.ui.container.elasticsearch.enabled: true
+
+# Reporting
+xpack.reporting.enabled: true
+xpack.reporting.encryptionKey: "${KIBANA_REPORTING_ENCRYPTION_KEY}"
+
+# Canvas (for custom visualizations)
+xpack.canvas.enabled: true
+
+# Maps
+xpack.maps.enabled: true
+
+# Machine Learning
+xpack.ml.enabled: false
+
+# Graph
+xpack.graph.enabled: true
+
+# APM
+xpack.apm.enabled: true
+xpack.apm.ui.enabled: true
+
+# Uptime
+xpack.uptime.enabled: true
+
+# Infrastructure
+xpack.infra.enabled: true
+
+# Logs
+xpack.logs.enabled: true
+
+# Default route
+server.defaultRoute: /app/kibana#/dashboards
+
+# Timezone
+dateFormat:tz: "UTC"
+
+# Custom branding
+xpack.branding.logo: "/usr/share/kibana/config/assets/emr-logo.png"
+xpack.branding.favicon: "/usr/share/kibana/config/assets/favicon.ico"
+xpack.branding.applicationTitle: "EMR Monitoring Dashboard"
+
+# Index patterns
+kibana.index: ".kibana"
+kibana.defaultAppId: "discover"
+
+# Saved objects
+savedObjects.maxImportPayloadBytes: 10485760
+
+# Data settings
+data.search.usageTelemetry.enabled: false
+data.search.aggs.shardDelay.enabled: true
+
+# Query settings
+search.maxAsyncSearchResponseTimeout: "60000ms"
+search.maxConcurrentShardRequests: 5
+
+# Visualization settings
+visualization:loaderDelay: 100
+
+# Dashboard settings
+dashboard.darkTheme: false
+
+# Newsfeed
+newsfeed.enabled: false
+
+# Telemetry
+telemetry.enabled: false
+telemetry.optIn: false
+
+# Banners
+xpack.banners.placement: "header"
+xpack.banners.textContent: "EMR Production Environment - Authorized Personnel Only"
+xpack.banners.backgroundColor: "#d4edda"
+xpack.banners.textColor: "#155724"
+
+# Spaces
+xpack.spaces.enabled: true
+xpack.spaces.maxSpaces: 100
+
+# Advanced settings
+xpack.advancedSettings.enabled: true
+
+# Custom plugin settings (if any)
+# emr_monitoring.enabled: true
+# emr_monitoring.alertThreshold: 80
+
+# CORS settings for API access
+server.cors.enabled: true
+server.cors.allowOrigin: ["https://grafana.emr-system.com", "https://prometheus.emr-system.com"]
+server.cors.allowCredentials: true
+server.cors.allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
+server.cors.allowHeaders: ["Content-Type", "Authorization", "kbn-xsrf-token"]
+
+# Request timeout
+elasticsearch.requestTimeout: 60000
+elasticsearch.pingTimeout: 3000
+elasticsearch.requestHeadersWhitelist: ["authorization", "es-security-runas-user"]
+
+# Health check
+server.healthCheck.delay: 15000
+
+# Compression
+server.compression.enabled: true
+server.compression.referrerWhitelist: ["https://grafana.emr-system.com"]
+
+# PID file
+pid.file: /usr/share/kibana/kibana.pid
+
+# Optimize settings for production
+optimize.enabled: true
+optimize.bundleDir: "/usr/share/kibana/optimize"
+optimize.watch: false
+optimize.watchPort: 5602
+optimize.watchHost: "localhost"
+optimize.watchPrebuild: false
+optimize.watchProxyTimeout: 300000
+optimize.useBundleCache: true
+optimize.sourceMaps: false

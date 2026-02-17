@@ -1,0 +1,250 @@
+type Query {
+    getHospitals: [Hospital!]!
+    getHospital(id: ID!): Hospital
+    getDevices(hospitalId: ID): [HospitalDevice!]!
+    getDevice(deviceId: String!): HospitalDevice
+    getActivities(hospitalId: ID, deviceId: ID, limit: Int, offset: Int): [Activity!]!
+}
+
+type Mutation {
+    registerDevice(input: RegisterDeviceInput!): HospitalDevice!
+    transferData(input: TransferDataInput!): DataTransferSession!
+}
+
+type Hospital {
+    id: ID!
+    hospitalId: String!
+    name: String!
+    address: String
+    city: String
+    state: String
+    country: String
+    postalCode: String
+    phone: String
+    email: String
+    website: String
+    status: HospitalStatus!
+    integrationEnabled: Boolean!
+    apiEndpoint: String
+    supportedDataTypes: String
+    createdAt: String
+    updatedAt: String
+}
+
+type HospitalDevice {
+    id: ID!
+    deviceId: String!
+    hospitalId: ID!
+    hospitalName: String!
+    deviceType: DeviceType!
+    deviceName: String!
+    manufacturer: String
+    model: String
+    serialNumber: String
+    firmwareVersion: String
+    ipAddress: String
+    macAddress: String
+    connectionType: ConnectionType!
+    status: DeviceStatus!
+    supportedProtocols: String
+    supportedDataFormats: String
+    lastHeartbeat: String
+    registeredAt: String!
+    lastActiveAt: String
+    createdAt: String
+    updatedAt: String
+}
+
+type Activity {
+    id: ID!
+    hospitalId: ID!
+    deviceId: ID
+    activityType: ActivityType!
+    activityDescription: String!
+    userId: ID
+    patientId: ID
+    recordId: String
+    recordType: RecordType
+    ipAddress: String
+    userAgent: String
+    metadata: String
+    timestamp: String!
+    createdAt: String
+}
+
+type DataTransferSession {
+    id: ID!
+    sessionId: String!
+    hospitalId: ID!
+    hospitalName: String!
+    deviceId: ID!
+    deviceName: String!
+    transferType: TransferType!
+    dataType: DataType!
+    protocol: TransferProtocol!
+    status: TransferStatus!
+    totalRecords: Long
+    processedRecords: Long
+    failedRecords: Long
+    dataSizeBytes: Long
+    transferredBytes: Long
+    sourceEndpoint: String
+    destinationEndpoint: String
+    initiatedBy: ID
+    errorMessage: String
+    metadata: String
+    startedAt: String
+    completedAt: String
+    createdAt: String
+    updatedAt: String
+}
+
+input RegisterDeviceInput {
+    hospitalId: ID!
+    deviceId: String!
+    deviceType: DeviceType!
+    deviceName: String!
+    manufacturer: String
+    model: String
+    serialNumber: String
+    firmwareVersion: String
+    ipAddress: String
+    macAddress: String
+    connectionType: ConnectionType!
+    supportedProtocols: String
+    supportedDataFormats: String
+}
+
+input TransferDataInput {
+    hospitalId: ID!
+    deviceId: ID!
+    transferType: TransferType!
+    dataType: DataType!
+    protocol: TransferProtocol!
+    totalRecords: Long
+    dataSizeBytes: Long
+    sourceEndpoint: String
+    destinationEndpoint: String
+    initiatedBy: ID
+    metadata: String
+}
+
+enum HospitalStatus {
+    ACTIVE
+    INACTIVE
+    SUSPENDED
+    PENDING_VERIFICATION
+}
+
+enum DeviceType {
+    EMR
+    LAB_SYSTEM
+    IMAGING
+    PHARMACY
+    CARDIAC_MONITOR
+    VITAL_SIGNS_MONITOR
+    INFUSION_PUMP
+    VENTILATOR
+    OTHER
+}
+
+enum ConnectionType {
+    ETHERNET
+    WIFI
+    BLUETOOTH
+    USB
+    SERIAL
+    API
+}
+
+enum DeviceStatus {
+    REGISTERED
+    ACTIVE
+    INACTIVE
+    MAINTENANCE
+    DECOMMISSIONED
+    ERROR
+}
+
+enum ActivityType {
+    DEVICE_REGISTRATION
+    DEVICE_HEARTBEAT
+    DEVICE_STATUS_CHANGE
+    DEVICE_MAINTENANCE
+    DATA_TRANSFER_INITIATED
+    DATA_TRANSFER_COMPLETED
+    DATA_TRANSFER_FAILED
+    DATA_TRANSFER_CANCELLED
+    ACCESS_REQUESTED
+    ACCESS_GRANTED
+    ACCESS_DENIED
+    ACCESS_REVOKED
+    PRESCRIPTION_CREATED
+    PRESCRIPTION_UPDATED
+    PRESCRIPTION_DELETED
+    PRESCRIPTION_ACCESSED
+    DIAGNOSIS_CREATED
+    DIAGNOSIS_UPDATED
+    DIAGNOSIS_DELETED
+    DIAGNOSIS_ACCESSED
+    LOGIN_SUCCESS
+    LOGIN_FAILED
+    LOGOUT
+    SESSION_EXPIRED
+    SYSTEM_MAINTENANCE
+    CONFIGURATION_CHANGE
+    ERROR_OCCURRED
+}
+
+enum RecordType {
+    PRESCRIPTION
+    DIAGNOSIS
+    LAB_RESULT
+    IMAGING
+    TREATMENT
+    MEDICATION
+    ALLERGY
+    VITAL_SIGN
+    PATIENT_RECORD
+}
+
+enum TransferType {
+    PULL
+    PUSH
+    SYNC
+}
+
+enum DataType {
+    PRESCRIPTION
+    DIAGNOSIS
+    LAB_RESULT
+    IMAGING
+    TREATMENT
+    MEDICATION
+    ALLERGY
+    VITAL_SIGN
+    PATIENT_RECORD
+    BULK_DATA
+}
+
+enum TransferProtocol {
+    HL7
+    FHIR
+    DICOM
+    REST_API
+    SOAP
+    SFTP
+    HTTPS
+    WEBSOCKET
+}
+
+enum TransferStatus {
+    INITIATED
+    CONNECTING
+    TRANSFERRING
+    PAUSED
+    COMPLETED
+    FAILED
+    CANCELLED
+    TIMEOUT
+}

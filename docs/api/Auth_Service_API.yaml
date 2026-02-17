@@ -1,0 +1,354 @@
+openapi: 3.0.0
+info:
+  title: Auth Service API
+  version: 1.0.0
+  description: API for user authentication and device management in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/auth/register:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseUser'
+  /api/auth/login:
+    post:
+      summary: Login user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseLoginResponse'
+  /api/auth/device-login:
+    post:
+      summary: Login with device authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceLoginRequest'
+      responses:
+        '200':
+          description: Device login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseLoginResponse'
+  /api/devices/register:
+    post:
+      summary: Register a new device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegistrationRequest'
+      responses:
+        '201':
+          description: Device registered successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDeviceDto'
+  /api/devices/{deviceId}:
+    get:
+      summary: Get device by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Device retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDeviceDto'
+  /api/devices/by-device-id/{deviceId}:
+    get:
+      summary: Get device by device ID string
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDeviceDto'
+  /api/devices/my-devices:
+    get:
+      summary: Get all devices for current user
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Devices retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListDeviceDto'
+  /api/devices/{deviceId}/status:
+    patch:
+      summary: Update device status
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: true
+          schema:
+            $ref: '#/components/schemas/DeviceStatus'
+      responses:
+        '200':
+          description: Device status updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDeviceDto'
+components:
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - usernameOrEmail
+        - password
+      properties:
+        usernameOrEmail:
+          type: string
+        password:
+          type: string
+    LoginResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        tokenType:
+          type: string
+          default: Bearer
+        expiresIn:
+          type: integer
+          format: int64
+    RegisterRequest:
+      type: object
+      required:
+        - email
+        - password
+        - fullName
+        - userType
+        - deviceType
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        ghanaCardId:
+          type: string
+          maxLength: 20
+        fullName:
+          type: string
+          minLength: 2
+          maxLength: 255
+        phoneNumber:
+          type: string
+          maxLength: 20
+        userType:
+          $ref: '#/components/schemas/UserType'
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+    DeviceLoginRequest:
+      type: object
+      required:
+        - usernameOrEmail
+        - password
+        - deviceId
+      properties:
+        usernameOrEmail:
+          type: string
+        password:
+          type: string
+        deviceId:
+          type: string
+    DeviceRegistrationRequest:
+      type: object
+      required:
+        - deviceId
+        - deviceType
+        - publicKey
+      properties:
+        deviceId:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        publicKey:
+          type: string
+    DeviceDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        publicKey:
+          type: string
+        status:
+          $ref: '#/components/schemas/DeviceStatus'
+        registeredAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          format: uuid
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+        ghanaCardId:
+          type: string
+        fullName:
+          type: string
+        phoneNumber:
+          type: string
+        userType:
+          $ref: '#/components/schemas/UserType'
+        supabaseUserId:
+          type: string
+          format: uuid
+        emailVerified:
+          type: boolean
+        isActive:
+          type: boolean
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApiResponseUser:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/User'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseLoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/LoginResponse'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseDeviceDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/DeviceDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListDeviceDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeviceDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    UserType:
+      type: string
+      enum: [PATIENT, DOCTOR, NURSE, ADMIN, RECEPTIONIST]
+    DeviceType:
+      type: string
+      enum: [MOBILE, DESKTOP, TABLET]
+    DeviceStatus:
+      type: string
+      enum: [ACTIVE, INACTIVE, BLOCKED]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

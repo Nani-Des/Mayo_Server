@@ -1,0 +1,146 @@
+server:
+  port: 8443
+  ssl:
+    enabled: false
+    key-store: classpath:certs/server/keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: server
+    trust-store: classpath:certs/ca/ca.crt
+    trust-store-type: PEM
+    client-auth: need
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_CHACHA20_POLY1305_SHA256
+
+spring:
+  application:
+    name: gateway
+
+  main:
+    web-application-type: reactive
+
+  cloud:
+    gateway:
+      routes:
+        # Auth Service Routes
+        - id: auth-service
+          uri: https://localhost:8444
+          predicates:
+            - Path=/api/auth/**
+          filters:
+            - StripPrefix=0
+        
+        # Patient Service Routes
+        - id: patient-service
+          uri: https://localhost:8445
+          predicates:
+            - Path=/api/patients/**
+          filters:
+            - StripPrefix=0
+
+        # Patient Record Service Routes (patient-record-service)
+        - id: patient-record-service
+          uri: https://localhost:8445
+          predicates:
+            - Path=/api/records/**
+          filters:
+            - StripPrefix=0
+
+        # Hospital Integration Service Routes
+        - id: hospital-integration-service
+          uri: https://localhost:8447
+          predicates:
+            - Path=/api/hospital/**
+          filters:
+            - StripPrefix=0
+
+        # GraphQL Routes
+        - id: graphql-service
+          uri: https://localhost:8447
+          predicates:
+            - Path=/graphql/**
+          filters:
+            - StripPrefix=0
+
+        # Sync Service Routes
+        - id: sync-service
+          uri: https://localhost:8448
+          predicates:
+            - Path=/api/sync/**
+          filters:
+            - StripPrefix=0
+
+        # Audit Service Routes
+        - id: audit-service
+          uri: https://localhost:8449
+          predicates:
+            - Path=/api/audit/**
+          filters:
+            - StripPrefix=0
+
+        # Device Registry Service Routes
+        - id: device-registry-service
+          uri: https://localhost:8084
+          predicates:
+            - Path=/api/devices/**
+          filters:
+            - StripPrefix=0
+
+        # Notification Service Routes
+        - id: notification-service
+          uri: https://localhost:8450
+          predicates:
+            - Path=/api/notifications/**
+          filters:
+            - StripPrefix=0
+      
+      default-filters:
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 10
+            redis-rate-limiter.burstCapacity: 20
+            redis-rate-limiter.requestedTokens: 1
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+
+# Gateway Secret (for service authentication)
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+
+# Eureka Client Configuration (Disabled - not currently used)
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: false
+    fetch-registry: false
+    enabled: false
+  instance:
+    hostname: localhost
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+  endpoint:
+    health:
+      show-details: always
+    gateway:
+      enabled: true

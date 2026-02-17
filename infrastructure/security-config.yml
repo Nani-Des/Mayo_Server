@@ -1,0 +1,234 @@
+# EMR Security Configuration for National-Level Deployment
+# This file contains all security hardening configurations
+
+# TLS/SSL Configuration
+tls:
+  enabled: true
+  protocol: TLSv1.3
+  ciphers:
+    - TLS_AES_256_GCM_SHA384
+    - TLS_AES_128_GCM_SHA256
+    - TLS_CHACHA20_POLY1305_SHA256
+  client-auth: need  # Mutual TLS for service-to-service communication
+
+# Encryption Configuration
+encryption:
+  aes:
+    key-size: 256
+    algorithm: AES/GCM/NoPadding
+    key-rotation-days: 90
+  data-at-rest: true
+  data-in-transit: true
+
+# Authentication & Authorization
+security:
+  jwt:
+    algorithm: HS512
+    access-token-expiry: 900000  # 15 minutes
+    refresh-token-expiry: 604800000  # 7 days
+  rbac:
+    enabled: true
+    permissions:
+      - PATIENT_READ_OWN_RECORDS
+      - PROVIDER_READ_PATIENT_RECORDS
+      - ADMIN_MANAGE_USERS
+      # ... additional permissions defined in Permission enum
+
+# Rate Limiting & DDoS Protection
+rate-limiting:
+  enabled: true
+  replenish-rate: 10  # requests per second
+  burst-capacity: 20
+  requested-tokens: 1
+  ddos-protection:
+    enabled: true
+    max-connections: 1000
+    connection-timeout: 30s
+
+# Web Application Firewall
+waf:
+  enabled: true
+  rules:
+    sql-injection: true
+    xss: true
+    path-traversal: true
+    command-injection: true
+    suspicious-patterns: true
+
+# Audit Logging
+audit:
+  enabled: true
+  security-events: true
+  retention:
+    active-years: 7
+    elasticsearch-months: 24
+  topics:
+    audit-events: audit.events
+
+# Secrets Management Integration
+secrets-management:
+  vault:
+    enabled: true
+    address: ${VAULT_ADDR}
+    token: ${VAULT_TOKEN}
+    auth-method: kubernetes  # Use Kubernetes service account for auth
+    secrets:
+      database:
+        path: database/creds/emr-app
+        lease-renewal: true
+        lease-duration: 3600
+      jwt:
+        path: secret/emr/jwt
+        rotation-policy: 30d
+      certificates:
+        path: pki_int/issue/emr
+        auto-renewal: true
+      api-keys:
+        path: secret/emr/api-keys
+      encryption-keys:
+        path: transit/keys/emr-data
+  kubernetes-secrets:
+    enabled: true
+    external-secrets-operator: true
+    secret-stores:
+      - name: vault-backend
+        type: vault
+      - name: aws-secrets-manager
+        type: aws
+  rotation:
+    enabled: true
+    schedule: "0 0 * * 0"  # Weekly rotation
+    notify: true
+
+# Automated Security Scanning
+security-scanning:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  tools:
+    - dependency-check
+    - sonar-qube
+    - owasp-zap
+  vulnerability-threshold: HIGH
+
+# Monitoring & Alerting
+monitoring:
+  enabled: true
+  metrics:
+    security-events: true
+    failed-authentications: true
+    blocked-requests: true
+  alerts:
+    security-incident:
+      enabled: true
+      channels: [email, slack, pager-duty]
+    high-severity-vulnerability:
+      enabled: true
+      threshold: 5
+
+# Input Validation
+input-validation:
+  enabled: true
+  sanitization: true
+  max-length:
+    string: 1000
+    email: 254
+    password: 128
+  allowed-patterns:
+    email: "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+    phone: "^\\+?[1-9]\\d{1,14}$"
+
+# Certificate Lifecycle Management
+certificates:
+  ca:
+    validity-days: 3650
+    key-size: 4096
+    algorithm: RSA
+  server:
+    validity-days: 365
+    auto-renewal: true
+    renewal-threshold-days: 30
+    cert-manager-integration: true
+    issuer: letsencrypt-prod
+    dns-challenge: true
+  client:
+    validity-days: 365
+    auto-renewal: true
+    device-certificates: true
+  lifecycle:
+    monitoring: true
+    alerts:
+      expiry-warning-days: 30
+      expiry-critical-days: 7
+    revocation-check: true
+    ocsp: enabled
+    crl: enabled
+  rotation:
+    automated: true
+    schedule: "0 0 1 * *"  # Monthly rotation
+    backup: true
+
+# Service Mesh (Istio/Envoy)
+service-mesh:
+  enabled: true
+  mTLS: true
+  policy-enforcement: true
+  traffic-policies:
+    - name: strict-mtls
+      peers:
+        - mtls: {}
+    - name: rate-limit
+      http_request_rate_limit:
+        requests_per_unit: 100
+        unit: MINUTE
+
+# Kubernetes Security Configurations
+kubernetes:
+  network-policies:
+    enabled: true
+    default-deny-all: true
+    allow-dns: true
+    allow-monitoring: true
+  pod-security-standards:
+    enabled: true
+    baseline: true
+    restricted: true
+    privileged: false
+  rbac:
+    enabled: true
+    service-accounts: dedicated
+    least-privilege: true
+    audit-logging: true
+
+# Backup & Recovery
+backup:
+  encryption: true
+  secure-transport: true
+  integrity-checks: true
+
+# Compliance Automation
+compliance:
+  hipaa:
+    enabled: true
+    data-encryption: true
+    access-controls: true
+    audit-logs: true
+    breach-notification: true
+    risk-assessments: monthly
+  gdpr:
+    enabled: true
+    data-minimization: true
+    consent-management: true
+    right-to-erasure: true
+    data-portability: true
+    privacy-by-design: true
+  soc2: true
+  automation:
+    scheduled-scans: "0 0 * * 1"  # Weekly compliance scans
+    automated-reports: true
+    violation-alerts: true
+    remediation-workflows: true
+    compliance-dashboard: true
+  audit-trails:
+    enabled: true
+    immutable: true
+    tamper-detection: true

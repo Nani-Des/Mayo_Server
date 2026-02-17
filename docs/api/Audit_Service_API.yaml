@@ -1,0 +1,369 @@
+openapi: 3.0.0
+info:
+  title: Audit Service API
+  version: 1.0.0
+  description: API for querying and managing audit events in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/audit/events:
+    get:
+      summary: Get audit events with filtering and pagination
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: patientId
+          in: query
+          schema:
+            type: string
+            format: uuid
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: resourceType
+          in: query
+          schema:
+            type: string
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: sortBy
+          in: query
+          schema:
+            type: string
+            default: timestamp
+        - name: sortDir
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditEventDto'
+  /api/audit/events/{eventId}:
+    get:
+      summary: Get specific audit event by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Audit event found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditEventDto'
+        '404':
+          description: Audit event not found
+  /api/audit/events/search:
+    get:
+      summary: Search audit events using Elasticsearch
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditEventDto'
+  /api/audit/users/{userId}/events:
+    get:
+      summary: Get audit events for a specific user
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: User audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditEventDto'
+  /api/audit/patients/{patientId}/events:
+    get:
+      summary: Get audit events for a specific patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 0
+        - name: size
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Patient audit events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageAuditEventDto'
+  /api/audit/statistics:
+    get:
+      summary: Get audit statistics
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: Audit statistics
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditStatisticsDto'
+components:
+  schemas:
+    AuditEventDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        eventId:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        userId:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+          format: uuid
+        hospitalId:
+          type: string
+          format: uuid
+        sessionId:
+          type: string
+        action:
+          type: string
+        resourceType:
+          type: string
+        resourceId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        ipAddress:
+          type: string
+        userAgent:
+          type: string
+        location:
+          type: object
+        metadata:
+          type: object
+        severity:
+          type: string
+          enum: [DEBUG, INFO, WARN, ERROR, CRITICAL]
+        complianceFlags:
+          type: object
+        hashValue:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AuditStatisticsDto:
+      type: object
+      properties:
+        totalEvents:
+          type: integer
+          format: int64
+        eventsLast24Hours:
+          type: integer
+          format: int64
+        eventsLast7Days:
+          type: integer
+          format: int64
+        eventsLast30Days:
+          type: integer
+          format: int64
+        eventsByAction:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        eventsBySeverity:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        eventsByResourceType:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+        uniqueUsers:
+          type: integer
+          format: int64
+        uniquePatients:
+          type: integer
+          format: int64
+        uniqueDevices:
+          type: integer
+          format: int64
+        averageEventsPerHour:
+          type: number
+          format: double
+        averageEventsPerDay:
+          type: number
+          format: double
+        complianceViolations:
+          type: integer
+          format: int64
+        violationsBySeverity:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+    PageAuditEventDto:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditEventDto'
+        pageable:
+          type: object
+          properties:
+            sort:
+              type: object
+              properties:
+                sorted:
+                  type: boolean
+                unsorted:
+                  type: boolean
+                empty:
+                  type: boolean
+            pageNumber:
+              type: integer
+            pageSize:
+              type: integer
+            offset:
+              type: integer
+              format: int64
+            paged:
+              type: boolean
+            unpaged:
+              type: boolean
+        totalPages:
+          type: integer
+        totalElements:
+          type: integer
+          format: int64
+        last:
+          type: boolean
+        first:
+          type: boolean
+        numberOfElements:
+          type: integer
+        size:
+          type: integer
+        number:
+          type: integer
+        sort:
+          type: object
+          properties:
+            sorted:
+              type: boolean
+            unsorted:
+              type: boolean
+            empty:
+              type: boolean
+        empty:
+          type: boolean
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

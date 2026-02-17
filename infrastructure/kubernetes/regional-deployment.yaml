@@ -1,0 +1,1088 @@
+# Multi-Region Kubernetes Deployment Manifests
+# This file contains the core deployment configurations for the EMR system across multiple regions
+
+---
+
+# Namespace Configuration for Multi-Region Deployment
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mayo-emr
+  labels:
+    app: mayo-emr
+    environment: production
+    compliance: hipaa-gdpr
+    region: multi-region
+
+---
+
+# Regional Service Account with RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: mayo-service-account
+  namespace: mayo-emr
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mayo-service-role
+  namespace: mayo-emr
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+
+---
+
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mayo-service-rolebinding
+  namespace: mayo-emr
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mayo-service-role
+subjects:
+- kind: ServiceAccount
+  name: mayo-service-account
+  namespace: mayo-emr
+
+---
+
+# Regional ConfigMap for Multi-Region Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: regional-config
+  namespace: mayo-emr
+data:
+  # Regional service endpoints
+  REGIONAL_ENDPOINTS: |
+    {
+      "accra": {
+        "api-gateway": "gateway-service.mayo-emr.svc.cluster.local:8080",
+        "postgres": "mayo-postgres.mayo-emr.svc.cluster.local:5432",
+        "redis": "mayo-redis.mayo-emr.svc.cluster.local:6379",
+        "kafka": "mayo-kafka.mayo-emr.svc.cluster.local:9092"
+      },
+      "kumasi": {
+        "api-gateway": "gateway-service-kumasi.mayo-emr.svc.cluster.local:8080",
+        "postgres": "mayo-postgres-kumasi.mayo-emr.svc.cluster.local:5432",
+        "redis": "mayo-redis-kumasi.mayo-emr.svc.cluster.local:6379",
+        "kafka": "mayo-kafka-kumasi.mayo-emr.svc.cluster.local:9092"
+      },
+      "takoradi": {
+        "api-gateway": "gateway-service-takoradi.mayo-emr.svc.cluster.local:8080",
+        "postgres": "mayo-postgres-takoradi.mayo-emr.svc.cluster.local:5432",
+        "redis": "mayo-redis-takoradi.mayo-emr.svc.cluster.local:6379",
+        "kafka": "mayo-kafka-takoradi.mayo-emr.svc.cluster.local:9092"
+      },
+      "tamale": {
+        "api-gateway": "gateway-service-tamale.mayo-emr.svc.cluster.local:8080",
+        "postgres": "mayo-postgres-tamale.mayo-emr.svc.cluster.local:5432",
+        "redis": "mayo-redis-tamale.mayo-emr.svc.cluster.local:6379",
+        "kafka": "mayo-kafka-tamale.mayo-emr.svc.cluster.local:9092"
+      }
+    }
+
+  # Regional service priorities
+  REGIONAL_PRIORITIES: |
+    {
+      "accra": 1,
+      "kumasi": 2,
+      "takoradi": 3,
+      "tamale": 4
+    }
+
+  # Geo-aware routing configuration
+  GEO_ROUTING_RULES: |
+    {
+      "default_region": "accra",
+      "region_mapping": {
+        "GH-AA": "accra",
+        "GH-AH": "accra",
+        "GH-TV": "takoradi",
+        "GH-WP": "takoradi",
+        "GH-UE": "tamale",
+        "GH-NE": "tamale",
+        "GH-AF": "kumasi",
+        "GH-BA": "kumasi"
+      },
+      "fallback_chain": ["accra", "kumasi", "takoradi", "tamale"]
+    }
+
+---
+
+# Multi-Region Deployment for Auth Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: mayo-emr
+  labels:
+    app: auth-service
+    service: auth
+    region: accra
+spec:
+  replicas: 3
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+        service: auth
+        region: accra
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8081"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      serviceAccountName: mayo-service-account
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - auth-service
+            topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/region
+                operator: In
+                values:
+                - accra
+      containers:
+      - name: auth-service
+        image: ghcr.io/mayo-emr/auth-service:2.1.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8081
+          name: http
+          protocol: TCP
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production,accra"
+        - name: REGION
+          value: "accra"
+        - name: PRIMARY_REGION
+          value: "true"
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: regional-config
+              key: REGIONAL_ENDPOINTS
+              optional: true
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: regional-config
+              key: REGIONAL_ENDPOINTS
+              optional: true
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          valueFrom:
+            configMapKeyRef:
+              name: regional-config
+              key: REGIONAL_ENDPOINTS
+              optional: true
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+          limits:
+            cpu: "2000m"
+            memory: "4Gi"
+        readinessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          successThreshold: 1
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /actuator/health
+            port: 8081
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 10
+          successThreshold: 1
+          failureThreshold: 5
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config
+      volumes:
+      - name: config-volume
+        configMap:
+          name: auth-service-config
+          optional: true
+
+---
+
+# Multi-Region Service for Auth Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: mayo-emr
+  labels:
+    app: auth-service
+    service: auth
+    region: accra
+spec:
+  type: ClusterIP
+  selector:
+    app: auth-service
+  ports:
+  - name: http
+    port: 80
+    targetPort: 8081
+    protocol: TCP
+
+---
+
+# Horizontal Pod Autoscaler for Auth Service
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+  namespace: mayo-emr
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 3
+  maxReplicas: 15
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  - type: External
+    external:
+      metric:
+        name: requests_per_second
+        selector:
+          matchLabels:
+            app: auth-service
+      target:
+        type: AverageValue
+        averageValue: 1000
+
+---
+
+# Multi-Region Ingress Configuration
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mayo-ingress
+  namespace: mayo-emr
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      if ($http_x_region) {
+        set $region $http_x_region;
+      }
+      if ($region = "") {
+        set $region "accra";
+      }
+      proxy_set_header X-Region $region;
+spec:
+  tls:
+  - hosts:
+    - api.mayo-health.gh
+    secretName: mayo-tls-secret
+  rules:
+  - host: api.mayo-health.gh
+    http:
+      paths:
+      - path: /api/auth
+        pathType: Prefix
+        backend:
+          service:
+            name: auth-service
+            port:
+              number: 80
+      - path: /api/patients
+        pathType: Prefix
+        backend:
+          service:
+            name: patient-service
+            port:
+              number: 80
+      - path: /api/records
+        pathType: Prefix
+        backend:
+          service:
+            name: medical-record-service
+            port:
+              number: 80
+      - path: /api/sync
+        pathType: Prefix
+        backend:
+          service:
+            name: sync-service
+            port:
+              number: 80
+      - path: /api/hospital
+        pathType: Prefix
+        backend:
+          service:
+            name: hospital-integration-service
+            port:
+              number: 80
+      - path: /api/audit
+        pathType: Prefix
+        backend:
+          service:
+            name: audit-service
+            port:
+              number: 80
+      - path: /api/notifications
+        pathType: Prefix
+        backend:
+          service:
+            name: notification-service
+            port:
+              number: 80
+      - path: /graphql
+        pathType: Prefix
+        backend:
+          service:
+            name: hospital-integration-service
+            port:
+              number: 80
+
+---
+
+# Multi-Region PostgreSQL Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-config
+  namespace: mayo-emr
+data:
+  POSTGRES_DB: "mayo_db"
+  POSTGRES_USER: "mayo"
+  POSTGRES_PASSWORD: "mayo_prod_password"
+  PGDATA: "/var/lib/postgresql/data/pgdata"
+  POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=en_US.utf8"
+  POSTGRES_HOST_AUTH_METHOD: "md5"
+
+---
+
+# PostgreSQL StatefulSet for Primary Region
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mayo-postgres
+  namespace: mayo-emr
+  labels:
+    app: postgres
+    role: primary
+    region: accra
+spec:
+  serviceName: "mayo-postgres"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: postgres
+      role: primary
+  template:
+    metadata:
+      labels:
+        app: postgres
+        role: primary
+        region: accra
+    spec:
+      serviceAccountName: mayo-service-account
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - postgres
+            topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/region
+                operator: In
+                values:
+                - accra
+      containers:
+      - name: postgres
+        image: postgres:15-alpine
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+          name: postgres
+        envFrom:
+        - configMapRef:
+            name: postgres-config
+        volumeMounts:
+        - name: postgres-data
+          mountPath: /var/lib/postgresql/data
+        - name: postgres-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "4Gi"
+          limits:
+            cpu: "4000m"
+            memory: "16Gi"
+        readinessProbe:
+          exec:
+            command:
+            - pg_isready
+            - "-U"
+            - mayo
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - "-U"
+            - mayo
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 10
+      volumes:
+      - name: postgres-init
+        configMap:
+          name: postgres-init-scripts
+  volumeClaimTemplates:
+  - metadata:
+      name: postgres-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "ssd"
+      resources:
+        requests:
+          storage: 100Gi
+
+---
+
+# PostgreSQL Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mayo-postgres
+  namespace: mayo-emr
+  labels:
+    app: postgres
+    role: primary
+    region: accra
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+    role: primary
+  ports:
+  - name: postgres
+    port: 5432
+    targetPort: 5432
+
+---
+
+# Redis Cluster Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: mayo-emr
+data:
+  redis.conf: |
+    cluster-enabled yes
+    cluster-config-file /data/nodes.conf
+    cluster-node-timeout 5000
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    save 900 1
+    save 300 10
+    save 60 10000
+    maxmemory 8gb
+    maxmemory-policy allkeys-lru
+    timeout 0
+    tcp-keepalive 60
+    loglevel notice
+    databases 16
+
+---
+
+# Redis StatefulSet for Multi-Region Cluster
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mayo-redis
+  namespace: mayo-emr
+  labels:
+    app: redis
+    role: cluster
+    region: accra
+spec:
+  serviceName: "mayo-redis"
+  replicas: 6
+  selector:
+    matchLabels:
+      app: redis
+      role: cluster
+  template:
+    metadata:
+      labels:
+        app: redis
+        role: cluster
+        region: accra
+    spec:
+      serviceAccountName: mayo-service-account
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - redis
+            topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/region
+                operator: In
+                values:
+                - accra
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        command: ["redis-server"]
+        args: ["/etc/redis/redis.conf"]
+        ports:
+        - containerPort: 6379
+          name: client
+        - containerPort: 16379
+          name: gossip
+        env:
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: redis-data
+          mountPath: /data
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "2Gi"
+          limits:
+            cpu: "2000m"
+            memory: "8Gi"
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 10
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+  volumeClaimTemplates:
+  - metadata:
+      name: redis-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "ssd"
+      resources:
+        requests:
+          storage: 50Gi
+
+---
+
+# Redis Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mayo-redis
+  namespace: mayo-emr
+  labels:
+    app: redis
+    role: cluster
+    region: accra
+spec:
+  type: ClusterIP
+  selector:
+    app: redis
+    role: cluster
+  ports:
+  - name: client
+    port: 6379
+    targetPort: 6379
+  - name: gossip
+    port: 16379
+    targetPort: 16379
+
+---
+
+# Kafka Cluster Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kafka-config
+  namespace: mayo-emr
+data:
+  kafka.properties: |
+    # Kafka broker configuration
+    broker.id=1
+    listeners=PLAINTEXT://:9092
+    advertised.listeners=PLAINTEXT://$(POD_IP):9092
+    zookeeper.connect=mayo-zookeeper:2181
+    log.dirs=/var/lib/kafka/data
+    num.partitions=3
+    default.replication.factor=3
+    min.insync.replicas=2
+    log.retention.hours=168
+    log.retention.bytes=1073741824
+    log.segment.bytes=104857600
+    log.cleanup.policy=delete
+    auto.create.topics.enable=true
+    offsets.topic.replication.factor=3
+    transaction.state.log.replication.factor=3
+    transaction.state.log.min.isr=2
+    unclean.leader.election.enable=false
+    compression.type=producer
+    num.io.threads=8
+    num.network.threads=3
+    socket.send.buffer.bytes=102400
+    socket.receive.buffer.bytes=102400
+    socket.request.max.bytes=104857600
+
+---
+
+# Kafka StatefulSet
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mayo-kafka
+  namespace: mayo-emr
+  labels:
+    app: kafka
+    role: broker
+    region: accra
+spec:
+  serviceName: "mayo-kafka"
+  replicas: 3
+  selector:
+    matchLabels:
+      app: kafka
+      role: broker
+  template:
+    metadata:
+      labels:
+        app: kafka
+        role: broker
+        region: accra
+    spec:
+      serviceAccountName: mayo-service-account
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values:
+                - kafka
+            topologyKey: "kubernetes.io/hostname"
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: topology.kubernetes.io/region
+                operator: In
+                values:
+                - accra
+      containers:
+      - name: kafka
+        image: confluentinc/cp-kafka:7.5.0
+        ports:
+        - containerPort: 9092
+          name: kafka
+        env:
+        - name: KAFKA_BROKER_ID
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: KAFKA_ZOOKEEPER_CONNECT
+          value: "mayo-zookeeper:2181"
+        - name: POD_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        volumeMounts:
+        - name: kafka-data
+          mountPath: /var/lib/kafka/data
+        - name: kafka-config
+          mountPath: /etc/kafka
+        resources:
+          requests:
+            cpu: "1000m"
+            memory: "4Gi"
+          limits:
+            cpu: "4000m"
+            memory: "16Gi"
+        readinessProbe:
+          exec:
+            command:
+            - kafka-broker-api-versions
+            - "--bootstrap-server"
+            - "localhost:9092"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          exec:
+            command:
+            - kafka-broker-api-versions
+            - "--bootstrap-server"
+            - "localhost:9092"
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 10
+      volumes:
+      - name: kafka-config
+        configMap:
+          name: kafka-config
+  volumeClaimTemplates:
+  - metadata:
+      name: kafka-data
+    spec:
+      accessModes: [ "ReadWriteOnce" ]
+      storageClassName: "ssd"
+      resources:
+        requests:
+          storage: 200Gi
+
+---
+
+# Kafka Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: mayo-kafka
+  namespace: mayo-emr
+  labels:
+    app: kafka
+    role: broker
+    region: accra
+spec:
+  type: ClusterIP
+  selector:
+    app: kafka
+    role: broker
+  ports:
+  - name: kafka
+    port: 9092
+    targetPort: 9092
+
+---
+
+# Monitoring and Observability Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: monitoring-config
+  namespace: mayo-emr
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+
+    scrape_configs:
+    - job_name: 'kubernetes-pods'
+      kubernetes_sd_configs:
+      - role: pod
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      - action: labelmap
+        regex: __meta_kubernetes_pod_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+
+    - job_name: 'kubernetes-services'
+      kubernetes_sd_configs:
+      - role: service
+      metrics_path: /probe
+      params:
+        module: [http_2xx]
+      relabel_configs:
+      - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_probe]
+        action: keep
+        regex: true
+      - source_labels: [__address__]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __param_target
+      - source_labels: [__param_target]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: instance
+      - action: labelmap
+        regex: __meta_kubernetes_service_label_(.+)
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      - source_labels: [__meta_kubernetes_service_name]
+        action: replace
+        target_label: kubernetes_name
+
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      smtp_smarthost: 'smtp.gmail.com:587'
+      smtp_from: 'alerts@mayo-health.gh'
+      smtp_auth_username: 'alerts@mayo-health.gh'
+      smtp_auth_password: 'alert-password'
+      smtp_require_tls: true
+
+    route:
+      group_by: ['alertname', 'region']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 3h
+      receiver: 'default-receiver'
+      routes:
+      - match:
+          severity: 'critical'
+        receiver: 'critical-alerts'
+      - match:
+          severity: 'warning'
+        receiver: 'warning-alerts'
+
+    receivers:
+    - name: 'default-receiver'
+      email_configs:
+      - to: 'operations@mayo-health.gh'
+        send_resolved: true
+    - name: 'critical-alerts'
+      email_configs:
+      - to: 'critical-alerts@mayo-health.gh'
+        send_resolved: true
+      pagerduty_configs:
+      - service_key: 'pagerduty-service-key'
+    - name: 'warning-alerts'
+      email_configs:
+      - to: 'warnings@mayo-health.gh'
+        send_resolved: true
+
+  grafana-datasources.yml: |
+    apiVersion: 1
+
+    datasources:
+    - name: Prometheus
+      type: prometheus
+      url: http://prometheus-server.monitoring.svc.cluster.local
+      access: proxy
+      isDefault: true
+      jsonData:
+        timeInterval: "15s"
+      editable: true
+
+    - name: Loki
+      type: loki
+      url: http://loki.monitoring.svc.cluster.local:3100
+      access: proxy
+      jsonData:
+        maxLines: 1000
+      editable: true
+
+---
+
+# Backup and Disaster Recovery Configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: backup-config
+  namespace: mayo-emr
+data:
+  velero-backup-schedule.yml: |
+    apiVersion: velero.io/v1
+    kind: Schedule
+    metadata:
+      name: daily-backup
+      namespace: velero
+    spec:
+      schedule: "0 2 * * *"
+      template:
+        includedNamespaces:
+        - mayo-emr
+        - monitoring
+        excludedResources:
+        - pods
+        - events
+        - events.events.k8s.io
+        storageLocation: regional-backup-storage
+        ttl: 168h
+        snapshotVolumes: true
+        volumeSnapshotLocations:
+        - regional-snapshot-location
+
+  velero-restore-policy.yml: |
+    apiVersion: velero.io/v1
+    kind: Restore
+    metadata:
+      name: regional-restore
+      namespace: velero
+    spec:
+      backupName: latest-daily-backup
+      includedNamespaces:
+      - mayo-emr
+      - monitoring
+      restorePVs: true
+      existingResourcePolicy: update
+      preserveNodePorts: false
+      restoreStatus:
+        inProgress: {}
+        completed: {}
+        failed: {}
+
+  disaster-recovery-playbook.md: |
+    # Multi-Region Disaster Recovery Playbook
+
+    ## Regional Outage Response
+
+    ### 1. Detection and Assessment
+    - **Trigger**: Monitoring alerts indicate regional outage
+    - **Action**: Verify outage scope and impact
+    - **Tools**: Prometheus, Grafana, AlertManager
+
+    ### 2. Traffic Rerouting
+    - **Action**: Activate CDN failover to nearest healthy region
+    - **Command**: `kubectl apply -f emergency-ingress-override.yaml`
+    - **Verification**: Check traffic distribution in Cloudflare dashboard
+
+    ### 3. Database Failover
+    - **Action**: Promote secondary region PostgreSQL to primary
+    - **Command**: `kubectl exec -it mayo-postgres-kumasi-0 -- psql -c "SELECT pg_promote();"`
+    - **Verification**: Check replication status and application connectivity
+
+    ### 4. Service Scaling
+    - **Action**: Scale up services in healthy regions
+    - **Command**: `kubectl scale deployment auth-service --replicas=15 -n mayo-emr`
+    - **Verification**: Monitor CPU/memory usage and request throughput
+
+    ### 5. Communication
+    - **Action**: Notify stakeholders via PagerDuty and email
+    - **Template**: Use incident communication template
+    - **Channels**: Slack #incidents, Email operations@mayo-health.gh
+
+    ### 6. Recovery and Resync
+    - **Action**: Restore failed region when infrastructure is available
+    - **Command**: `velero restore create --from-backup daily-backup-20231203`
+    - **Verification**: Check service health and data consistency
+
+    ## Data Corruption Response
+
+    ### 1. Isolation
+    - **Action**: Quarantine affected services
+    - **Command**: `kubectl scale deployment affected-service --replicas=0`
+
+    ### 2. Backup Restoration
+    - **Action**: Restore from last known good backup
+    - **Command**: `velero restore create --from-backup last-good-backup`
+
+    ### 3. Data Validation
+    - **Action**: Run data integrity checks
+    - **Command**: `kubectl exec -it audit-service-0 -- java -jar audit-integrity-checker.jar`
+
+    ### 4. Service Resumption
+    - **Action**: Gradually restore services
+    - **Command**: `kubectl scale deployment affected-service --replicas=3`
+
+    ## Regional Configuration Files
+    - **Accra**: `regional-config-accra.yaml`
+    - **Kumasi**: `regional-config-kumasi.yaml`
+    - **Takoradi**: `regional-config-takoradi.yaml`
+    - **Tamale**: `regional-config-tamale.yaml`

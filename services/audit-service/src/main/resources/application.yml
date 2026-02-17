@@ -1,0 +1,165 @@
+server:
+  port: 8449
+  ssl:
+    enabled: false
+    key-store: classpath:certs/server/keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: server
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_CHACHA20_POLY1305_SHA256
+
+spring:
+  application:
+    name: audit-service
+  security:
+    user:
+      password: dev_only_placeholder
+  output:
+    ansi:
+      enabled: ALWAYS
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:mayo_db}?currentSchema=audit
+    username: ${DB_USER:mayo}
+    password: ${DB_PASSWORD:mayo_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SQL_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: audit
+    packages-to-scan: com.mayo.audit
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: audit
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: audit-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+    connection-timeout: 10000
+    socket-timeout: 30000
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}    # 15 minutes
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000} # 7 days
+
+# Gateway Secret (for service authentication)
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+
+# MinIO Configuration
+minio:
+  endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+  access-key: ${MINIO_ACCESS_KEY:mayo}
+  secret-key: ${MINIO_SECRET_KEY:mayo_dev_password}
+  bucket: ${MINIO_BUCKET:audit-archive}
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: ${SQL_DEBUG:false}
+    org.elasticsearch: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/audit-service.log
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  prometheus:
+    metrics:
+      export:
+          enabled: true
+
+# Audit Service Configuration
+audit:
+  kafka:
+    consumer:
+      concurrency: 3
+      poll-timeout: 1000ms
+  elasticsearch:
+    index:
+      name: audit_events
+      shards: 3
+      replicas: 1
+      refresh-interval: 30s
+  retention:
+    active-years: 7
+    elasticsearch-months: 24
+    archive-compression: true
+  compliance:
+    rules:
+      enabled: true
+      evaluation-interval: 30000ms  # 30 seconds
+    monitoring:
+      enabled: true
+      alert-threshold: 5  # violations per minute
+  export:
+    max-records: 100000
+    formats: [CSV, JSON, PDF]
+  security:
+    hash-algorithm: SHA-256
+    encryption-enabled: true

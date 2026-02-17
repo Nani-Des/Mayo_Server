@@ -1,0 +1,1142 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    name: monitoring
+    app: emr-monitoring
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      scrape_timeout: 10s
+
+    rule_files:
+      - alert_rules.yml
+
+    alerting:
+      alertmanagers:
+        - static_configs:
+            - targets:
+              - alertmanager:9093
+
+    scrape_configs:
+      - job_name: 'gateway'
+        static_configs:
+          - targets: ['gateway.gateway.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'auth-service'
+        static_configs:
+          - targets: ['auth-service.auth.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'patient-record-service'
+        static_configs:
+          - targets: ['patient-record-service.patient.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'sync-service'
+        static_configs:
+          - targets: ['sync-service.sync.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'audit-service'
+        static_configs:
+          - targets: ['audit-service.audit.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'notification-service'
+        static_configs:
+          - targets: ['notification-service.notification.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'hospital-integration-service'
+        static_configs:
+          - targets: ['hospital-integration-service.hospital.svc.cluster.local:8080']
+        metrics_path: '/actuator/prometheus'
+        scrape_interval: 15s
+        scrape_timeout: 10s
+
+      - job_name: 'kubernetes-nodes'
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_node_label_(.+)
+          - target_label: __address__
+            replacement: kubernetes.default.svc:443
+          - source_labels: [__meta_kubernetes_node_name]
+            regex: (.+)
+            target_label: __metrics_path__
+            replacement: /api/v1/nodes/${1}/proxy/metrics
+
+      - job_name: 'kubernetes-pods'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+          - source_labels: [__meta_kubernetes_pod_container_port_number]
+            action: keep
+            regex: 9\d{3}
+
+      - job_name: 'kubernetes-cadvisor'
+        kubernetes_sd_configs:
+          - role: pod
+        scheme: https
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        relabel_configs:
+          - action: labelmap
+            regex: __meta_kubernetes_pod_label_(.+)
+          - source_labels: [__meta_kubernetes_namespace]
+            action: replace
+            target_label: kubernetes_namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            action: replace
+            target_label: kubernetes_pod_name
+          - source_labels: [__meta_kubernetes_pod_container_name]
+            action: replace
+            target_label: kubernetes_container_name
+        metric_relabel_configs:
+          - action: keep
+            regex: container_cpu_usage_seconds_total|container_memory_usage_bytes|container_network_receive_bytes_total|container_network_transmit_bytes_total
+            source_labels: [__name__]
+
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      - job_name: 'grafana'
+        static_configs:
+          - targets: ['grafana:3000']
+
+      - job_name: 'elasticsearch'
+        static_configs:
+          - targets: ['elasticsearch:9200']
+        metrics_path: '/_prometheus/metrics'
+        scrape_interval: 30s
+
+      - job_name: 'jaeger'
+        static_configs:
+          - targets: ['jaeger-collector:14268']
+        scrape_interval: 30s
+
+  alert_rules.yml: |
+    groups:
+      - name: emr_service_alerts
+        rules:
+          - alert: EMRServiceDown
+            expr: up{job=~"gateway|auth-service|patient-record-service|sync-service|audit-service|notification-service|hospital-integration-service"} == 0
+            for: 5m
+            labels:
+              severity: critical
+              service: "{{ $labels.job }}"
+            annotations:
+              summary: "EMR Service {{ $labels.job }} is down"
+              description: "EMR Service {{ $labels.job }} has been down for more than 5 minutes."
+
+          - alert: EMRServiceHighCPU
+            expr: rate(container_cpu_usage_seconds_total{pod=~".*"}[5m]) / container_spec_cpu_quota * 100 > 80
+            for: 10m
+            labels:
+              severity: warning
+              service: "{{ $labels.pod }}"
+            annotations:
+              summary: "High CPU usage on {{ $labels.pod }}"
+              description: "CPU usage is {{ $value }}% for pod {{ $labels.pod }}"
+
+          - alert: EMRServiceHighMemory
+            expr: container_memory_usage_bytes{pod=~".*"} / container_spec_memory_limit_bytes * 100 > 85
+            for: 5m
+            labels:
+              severity: warning
+              service: "{{ $labels.pod }}"
+            annotations:
+              summary: "High memory usage on {{ $labels.pod }}"
+              description: "Memory usage is {{ $value }}% for pod {{ $labels.pod }}"
+
+          - alert: EMRServiceRestarting
+            expr: increase(kube_pod_container_status_restarts_total[10m]) > 0
+            for: 2m
+            labels:
+              severity: warning
+              service: "{{ $labels.pod }}"
+            annotations:
+              summary: "Pod {{ $labels.pod }} is restarting"
+              description: "Pod {{ $labels.pod }} has restarted {{ $value }} times in the last 10 minutes"
+
+      - name: security_alerts
+        rules:
+          - alert: HighFailedLoginAttempts
+            expr: rate(failed_login_attempts_total[5m]) > 10
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High number of failed login attempts"
+              description: "Rate of failed login attempts is {{ $value }} per second"
+
+          - alert: WAFHighBlockedRequests
+            expr: rate(waf_blocked_requests_total[5m]) > 50
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High number of WAF blocked requests"
+              description: "Rate of WAF blocked requests is {{ $value }} per second"
+
+          - alert: CertificateExpiryWarning
+            expr: certificate_expiry_days < 30
+            for: 24h
+            labels:
+              severity: warning
+              certificate: "{{ $labels.certificate_name }}"
+            annotations:
+              summary: "Certificate {{ $labels.certificate_name }} expires soon"
+              description: "Certificate {{ $labels.certificate_name }} expires in {{ $value }} days"
+
+          - alert: CertificateExpiryCritical
+            expr: certificate_expiry_days < 7
+            for: 1h
+            labels:
+              severity: critical
+              certificate: "{{ $labels.certificate_name }}"
+            annotations:
+              summary: "Certificate {{ $labels.certificate_name }} expires very soon"
+              description: "Certificate {{ $labels.certificate_name }} expires in {{ $value }} days"
+
+          - alert: ComplianceViolation
+            expr: increase(compliance_violations_total[5m]) > 0
+            for: 1m
+            labels:
+              severity: critical
+              violation_type: "{{ $labels.violation_type }}"
+            annotations:
+              summary: "Compliance violation detected"
+              description: "Compliance violation of type {{ $labels.violation_type }} detected"
+
+      - name: infrastructure_alerts
+        rules:
+          - alert: NodeDown
+            expr: up{job="kubernetes-nodes"} == 0
+            for: 5m
+            labels:
+              severity: critical
+              node: "{{ $labels.kubernetes_node_name }}"
+            annotations:
+              summary: "Kubernetes node {{ $labels.kubernetes_node_name }} is down"
+              description: "Kubernetes node {{ $labels.kubernetes_node_name }} has been down for more than 5 minutes"
+
+          - alert: NodeHighCPU
+            expr: rate(container_cpu_usage_seconds_total{container=""}[5m]) / container_spec_cpu_quota * 100 > 90
+            for: 10m
+            labels:
+              severity: warning
+              node: "{{ $labels.kubernetes_node_name }}"
+            annotations:
+              summary: "High CPU usage on node {{ $labels.kubernetes_node_name }}"
+              description: "CPU usage is {{ $value }}% on node {{ $labels.kubernetes_node_name }}"
+
+          - alert: NodeHighMemory
+            expr: container_memory_usage_bytes{container=""} / container_spec_memory_limit_bytes * 100 > 90
+            for: 5m
+            labels:
+              severity: warning
+              node: "{{ $labels.kubernetes_node_name }}"
+            annotations:
+              summary: "High memory usage on node {{ $labels.kubernetes_node_name }}"
+              description: "Memory usage is {{ $value }}% on node {{ $labels.kubernetes_node_name }}"
+
+          - alert: DiskSpaceLow
+            expr: (1 - node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100 > 85
+            for: 10m
+            labels:
+              severity: warning
+              mountpoint: "{{ $labels.mountpoint }}"
+            annotations:
+              summary: "Low disk space on {{ $labels.mountpoint }}"
+              description: "Disk usage is {{ $value }}% on {{ $labels.mountpoint }}"
+
+      - name: database_alerts
+        rules:
+          - alert: PostgreSQLDown
+            expr: up{job="postgresql"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "PostgreSQL is down"
+              description: "PostgreSQL has been down for more than 5 minutes"
+
+          - alert: PostgreSQLHighConnections
+            expr: pg_stat_activity_count > 100
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High number of PostgreSQL connections"
+              description: "PostgreSQL has {{ $value }} active connections"
+
+          - alert: RedisDown
+            expr: up{job="redis"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Redis is down"
+              description: "Redis has been down for more than 5 minutes"
+
+          - alert: RedisHighMemoryUsage
+            expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+            for: 5m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High Redis memory usage"
+              description: "Redis memory usage is {{ $value }}%"
+
+      - name: messaging_alerts
+        rules:
+          - alert: KafkaDown
+            expr: up{job="kafka"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Kafka is down"
+              description: "Kafka has been down for more than 5 minutes"
+
+          - alert: KafkaHighLag
+            expr: kafka_consumergroup_lag > 1000
+            for: 5m
+            labels:
+              severity: warning
+              consumer_group: "{{ $labels.consumergroup }}"
+              topic: "{{ $labels.topic }}"
+            annotations:
+              summary: "High Kafka consumer lag"
+              description: "Consumer group {{ $labels.consumergroup }} has lag of {{ $value }} for topic {{ $labels.topic }}"
+
+      - name: logging_alerts
+        rules:
+          - alert: ElasticsearchDown
+            expr: up{job="elasticsearch"} == 0
+            for: 5m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Elasticsearch is down"
+              description: "Elasticsearch has been down for more than 5 minutes"
+
+          - alert: ElasticsearchHighCPU
+            expr: rate(elasticsearch_process_cpu_percent[5m]) > 80
+            for: 10m
+            labels:
+              severity: warning
+            annotations:
+              summary: "High Elasticsearch CPU usage"
+              description: "Elasticsearch CPU usage is {{ $value }}%"
+
+          - alert: ElasticsearchLowDiskSpace
+            expr: elasticsearch_filesystem_data_available_bytes / elasticsearch_filesystem_data_size_bytes * 100 < 15
+            for: 10m
+            labels:
+              severity: critical
+            annotations:
+              summary: "Low disk space in Elasticsearch"
+              description: "Elasticsearch data disk space is {{ $value }}% available"
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboards
+  namespace: monitoring
+  labels:
+    app: grafana
+data:
+  security-dashboard.json: |
+    {
+        "dashboard": {
+            "title": "EMR Security Monitoring Dashboard",
+            "tags": [
+                "emr",
+                "security",
+                "production"
+            ],
+            "timezone": "UTC",
+            "panels": [
+                {
+                    "id": 1,
+                    "title": "Security Events Overview",
+                    "type": "table",
+                    "targets": [
+                        {
+                            "expr": "rate(audit_events_total{action=~\".*\"}[5m])",
+                            "legendFormat": "{{action}}"
+                        }
+                    ]
+                },
+                {
+                    "id": 2,
+                    "title": "Failed Authentication Attempts",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(failed_login_attempts_total[5m])",
+                            "legendFormat": "Failed Logins"
+                        }
+                    ]
+                },
+                {
+                    "id": 3,
+                    "title": "WAF Blocked Requests",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(waf_blocked_requests_total[5m])",
+                            "legendFormat": "Blocked Requests"
+                        }
+                    ]
+                },
+                {
+                    "id": 4,
+                    "title": "Rate Limiting Events",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(rate_limit_exceeded_total[5m])",
+                            "legendFormat": "Rate Limit Hits"
+                        }
+                    ]
+                },
+                {
+                    "id": 5,
+                    "title": "TLS Handshake Failures",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(tls_handshake_failures_total[5m])",
+                            "legendFormat": "TLS Failures"
+                        }
+                    ]
+                },
+                {
+                    "id": 6,
+                    "title": "Security Alerts",
+                    "type": "table",
+                    "targets": [
+                        {
+                            "expr": "security_alerts_total",
+                            "legendFormat": "{{alert_type}}"
+                        }
+                    ]
+                },
+                {
+                    "id": 7,
+                    "title": "Compliance Violations",
+                    "type": "table",
+                    "targets": [
+                        {
+                            "expr": "compliance_violations_total",
+                            "legendFormat": "{{violation_type}} - {{severity}}"
+                        }
+                    ]
+                },
+                {
+                    "id": 8,
+                    "title": "Certificate Expiry Status",
+                    "type": "table",
+                    "targets": [
+                        {
+                            "expr": "certificate_expiry_days",
+                            "legendFormat": "{{certificate_name}} - {{days_until_expiry}} days"
+                        }
+                    ]
+                },
+                {
+                    "id": 9,
+                    "title": "Encryption Operations",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(encryption_operations_total[5m])",
+                            "legendFormat": "Encryption Ops"
+                        },
+                        {
+                            "expr": "rate(decryption_operations_total[5m])",
+                            "legendFormat": "Decryption Ops"
+                        }
+                    ]
+                },
+                {
+                    "id": 10,
+                    "title": "Data Access Patterns",
+                    "type": "heatmap",
+                    "targets": [
+                        {
+                            "expr": "rate(data_access_total{access_type=\"read\"}[5m])",
+                            "legendFormat": "Read Access"
+                        },
+                        {
+                            "expr": "rate(data_access_total{access_type=\"write\"}[5m])",
+                            "legendFormat": "Write Access"
+                        }
+                    ]
+                },
+                {
+                    "id": 11,
+                    "title": "User Session Anomalies",
+                    "type": "graph",
+                    "targets": [
+                        {
+                            "expr": "rate(session_anomalies_total[5m])",
+                            "legendFormat": "Session Anomalies"
+                        }
+                    ]
+                },
+                {
+                    "id": 12,
+                    "title": "HIPAA Compliance Status",
+                    "type": "stat",
+                    "targets": [
+                        {
+                            "expr": "hipaa_compliance_score",
+                            "legendFormat": "Compliance Score"
+                        }
+                    ]
+                },
+                {
+                    "id": 13,
+                    "title": "Security Incident Timeline",
+                    "type": "timeline",
+                    "targets": [
+                        {
+                            "expr": "security_incidents_total",
+                            "legendFormat": "{{incident_type}}"
+                        }
+                    ]
+                },
+                {
+                    "id": 14,
+                    "title": "Device Certificate Validation",
+                    "type": "table",
+                    "targets": [
+                        {
+                            "expr": "device_certificate_status",
+                            "legendFormat": "{{device_id}} - {{status}}"
+                        }
+                    ]
+                },
+                {
+                    "id": 15,
+                    "title": "Audit Log Integrity",
+                    "type": "stat",
+                    "targets": [
+                        {
+                            "expr": "audit_log_integrity_check",
+                            "legendFormat": "Integrity Status"
+                        }
+                    ]
+                }
+            ],
+            "time": {
+                "from": "now-1h",
+                "to": "now"
+            },
+            "refresh": "30s",
+            "templating": {
+                "list": [
+                    {
+                        "name": "namespace",
+                        "query": "label_values(namespace)",
+                        "type": "query"
+                    },
+                    {
+                        "name": "service",
+                        "query": "label_values(service)",
+                        "type": "query"
+                    }
+                ]
+            }
+        }
+    }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+      - name: prometheus
+        image: prom/prometheus:v2.40.0
+        ports:
+        - containerPort: 9090
+        args:
+        - --config.file=/etc/prometheus/prometheus.yml
+        - --storage.tsdb.path=/prometheus
+        - --web.console.libraries=/etc/prometheus/console_libraries
+        - --web.console.templates=/etc/prometheus/consoles
+        - --storage.tsdb.retention.time=200h
+        - --web.enable-lifecycle
+        - --web.enable-admin-api
+        - --web.listen-address=:9090
+        volumeMounts:
+        - name: config-volume
+          mountPath: /etc/prometheus
+        - name: prometheus-storage
+          mountPath: /prometheus
+        resources:
+          requests:
+            memory: "400Mi"
+            cpu: "100m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /-/healthy
+            port: 9090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /-/ready
+            port: 9090
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: config-volume
+        configMap:
+          name: prometheus-config
+      - name: prometheus-storage
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+  labels:
+    app: prometheus
+spec:
+  selector:
+    app: prometheus
+  ports:
+  - port: 9090
+    targetPort: 9090
+    name: web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+      - name: grafana
+        image: grafana/grafana:9.3.0
+        ports:
+        - containerPort: 3000
+        env:
+        - name: GF_SECURITY_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: grafana-secret
+              key: admin-password
+        - name: GF_USERS_ALLOW_SIGN_UP
+          value: "false"
+        - name: GF_INSTALL_PLUGINS
+          value: "grafana-piechart-panel,grafana-worldmap-panel"
+        volumeMounts:
+        - name: grafana-storage
+          mountPath: /var/lib/grafana
+        - name: grafana-dashboards
+          mountPath: /var/lib/grafana/dashboards
+        - name: grafana-config
+          mountPath: /etc/grafana/provisioning
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+      volumes:
+      - name: grafana-storage
+        emptyDir: {}
+      - name: grafana-dashboards
+        configMap:
+          name: grafana-dashboards
+      - name: grafana-config
+        configMap:
+          name: grafana-provisioning
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    app: grafana
+spec:
+  selector:
+    app: grafana
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: web
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: elasticsearch
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+spec:
+  serviceName: elasticsearch
+  replicas: 3
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: docker.elastic.co/elasticsearch/elasticsearch:8.5.0
+        ports:
+        - containerPort: 9200
+          name: http
+        - containerPort: 9300
+          name: transport
+        env:
+        - name: discovery.type
+          value: single-node
+        - name: ES_JAVA_OPTS
+          value: "-Xms2g -Xmx2g"
+        - name: xpack.security.enabled
+          value: "true"
+        - name: ELASTIC_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-secret
+              key: elastic-password
+        volumeMounts:
+        - name: elasticsearch-data
+          mountPath: /usr/share/elasticsearch/data
+        resources:
+          requests:
+            memory: "4Gi"
+            cpu: "1000m"
+          limits:
+            memory: "8Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+            scheme: HTTPS
+            httpHeaders:
+            - name: Authorization
+              value: "Basic ZWxhc3RpYzpjaGFuZ2VtZQ=="
+          initialDelaySeconds: 300
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+            scheme: HTTPS
+            httpHeaders:
+            - name: Authorization
+              value: "Basic ZWxhc3RpYzpjaGFuZ2VtZQ=="
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: elasticsearch-data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch
+  namespace: monitoring
+  labels:
+    app: elasticsearch
+spec:
+  selector:
+    app: elasticsearch
+  ports:
+  - port: 9200
+    targetPort: 9200
+    name: http
+  - port: 9300
+    targetPort: 9300
+    name: transport
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: logstash
+  namespace: monitoring
+  labels:
+    app: logstash
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: logstash
+  template:
+    metadata:
+      labels:
+        app: logstash
+    spec:
+      containers:
+      - name: logstash
+        image: docker.elastic.co/logstash/logstash:8.5.0
+        ports:
+        - containerPort: 5044
+          name: beats
+        - containerPort: 8080
+          name: http
+        volumeMounts:
+        - name: logstash-config
+          mountPath: /usr/share/logstash/config
+        - name: logstash-pipeline
+          mountPath: /usr/share/logstash/pipeline
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: logstash-config
+        configMap:
+          name: logstash-config
+      - name: logstash-pipeline
+        configMap:
+          name: logstash-pipeline
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: docker.elastic.co/kibana/kibana:8.5.0
+        ports:
+        - containerPort: 5601
+        env:
+        - name: ELASTICSEARCH_HOSTS
+          value: "https://elasticsearch:9200"
+        - name: ELASTICSEARCH_USERNAME
+          value: "elastic"
+        - name: ELASTICSEARCH_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-secret
+              key: elastic-password
+        volumeMounts:
+        - name: kibana-config
+          mountPath: /usr/share/kibana/config
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "200m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 30
+          periodSeconds: 10
+      volumes:
+      - name: kibana-config
+        configMap:
+          name: kibana-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana
+  namespace: monitoring
+  labels:
+    app: kibana
+spec:
+  selector:
+    app: kibana
+  ports:
+  - port: 5601
+    targetPort: 5601
+    name: web
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jaeger
+  namespace: monitoring
+  labels:
+    app: jaeger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jaeger
+  template:
+    metadata:
+      labels:
+        app: jaeger
+    spec:
+      containers:
+      - name: jaeger
+        image: jaegertracing/all-in-one:1.41.0
+        ports:
+        - containerPort: 16686
+          name: ui
+        - containerPort: 14268
+          name: collector-grpc
+        - containerPort: 14250
+          name: collector-http
+        env:
+        - name: COLLECTOR_OTLP_ENABLED
+          value: "true"
+        - name: SPAN_STORAGE_TYPE
+          value: "elasticsearch"
+        - name: ES_SERVER_URLS
+          value: "https://elasticsearch:9200"
+        - name: ES_USERNAME
+          value: "elastic"
+        - name: ES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: elasticsearch-secret
+              key: elastic-password
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 16686
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: monitoring
+  labels:
+    app: jaeger
+spec:
+  selector:
+    app: jaeger
+  ports:
+  - port: 16686
+    targetPort: 16686
+    name: ui
+  - port: 14268
+    targetPort: 14268
+    name: collector-grpc
+  - port: 14250
+    targetPort: 14250
+    name: collector-http
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes
+  - nodes/proxy
+  - services
+  - endpoints
+  - pods
+  verbs: ["get", "list", "watch"]
+- apiGroups:
+  - extensions
+  resources:
+  - ingresses
+  verbs: ["get", "list", "watch"]
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus
+subjects:
+- kind: ServiceAccount
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  tls:
+  - hosts:
+    - monitoring.emr-system.com
+    secretName: monitoring-tls
+  rules:
+  - host: monitoring.emr-system.com
+    http:
+      paths:
+      - path: /prometheus
+        pathType: Prefix
+        backend:
+          service:
+            name: prometheus
+            port:
+              number: 9090
+      - path: /grafana
+        pathType: Prefix
+        backend:
+          service:
+            name: grafana
+            port:
+              number: 3000
+      - path: /kibana
+        pathType: Prefix
+        backend:
+          service:
+            name: kibana
+            port:
+              number: 5601
+      - path: /jaeger
+        pathType: Prefix
+        backend:
+          service:
+            name: jaeger
+            port:
+              number: 16686

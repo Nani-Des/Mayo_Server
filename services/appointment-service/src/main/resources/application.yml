@@ -1,0 +1,97 @@
+server:
+  port: 8452
+  ssl:
+    enabled: false
+
+spring:
+  application:
+    name: appointment-service
+  security:
+    user:
+      password: dev_only_placeholder
+  output:
+    ansi:
+      enabled: ALWAYS
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:mayo_db}?currentSchema=appointment
+    username: ${DB_USER:mayo}
+    password: ${DB_PASSWORD:mayo_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SQL_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: appointment
+  
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: appointment
+    validate-on-migrate: false
+    out-of-order: false
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      group-id: appointment-service
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}    # 15 minutes
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000} # 7 days
+
+# Gateway Secret (for service authentication)
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: ${SQL_DEBUG:false}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/appointment-service.log
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized

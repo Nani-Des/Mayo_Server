@@ -1,0 +1,157 @@
+{
+    "dashboard": {
+        "title": "EMR System Performance Dashboard",
+        "tags": [
+            "emr",
+            "system",
+            "performance"
+        ],
+        "timezone": "UTC",
+        "panels": [
+            {
+                "id": 1,
+                "title": "System Overview",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "up{job=~\"gateway|auth-service|patient-record-service|sync-service|audit-service|notification-service|hospital-integration-service\"}",
+                        "legendFormat": "Services Up"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Service Response Times",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=~\".*\"}[5m]))",
+                        "legendFormat": "95th percentile - {{job}}"
+                    },
+                    {
+                        "expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=~\".*\"}[5m]))",
+                        "legendFormat": "50th percentile - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Error Rates",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(http_requests_total{status=~\"5..\"}[5m]) / rate(http_requests_total[5m]) * 100",
+                        "legendFormat": "Error Rate % - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "JVM Memory Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "jvm_memory_used_bytes{area=\"heap\"} / jvm_memory_max_bytes{area=\"heap\"} * 100",
+                        "legendFormat": "Heap Usage % - {{job}}"
+                    },
+                    {
+                        "expr": "jvm_memory_used_bytes{area=\"nonheap\"} / jvm_memory_max_bytes{area=\"nonheap\"} * 100",
+                        "legendFormat": "Non-Heap Usage % - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "JVM GC Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(jvm_gc_collection_seconds_sum[5m])",
+                        "legendFormat": "GC Time - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "Thread Pool Usage",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "tomcat_threads_busy",
+                        "legendFormat": "Busy Threads - {{job}}"
+                    },
+                    {
+                        "expr": "tomcat_threads_current",
+                        "legendFormat": "Current Threads - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "title": "Database Connection Pool",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "hikaricp_connections_active",
+                        "legendFormat": "Active Connections - {{job}}"
+                    },
+                    {
+                        "expr": "hikaricp_connections_idle",
+                        "legendFormat": "Idle Connections - {{job}}"
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "title": "Cache Hit Rates",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "cache_hit_ratio",
+                        "legendFormat": "Cache Hit Rate - {{cache_name}}"
+                    }
+                ]
+            },
+            {
+                "id": 9,
+                "title": "Service Health Checks",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "up{job=~\".*\"}",
+                        "legendFormat": "{{job}} - {{instance}}"
+                    }
+                ]
+            },
+            {
+                "id": 10,
+                "title": "Log Error Volume",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(logback_events_total{level=\"ERROR\"}[5m])",
+                        "legendFormat": "Error Logs - {{job}}"
+                    },
+                    {
+                        "expr": "rate(logback_events_total{level=\"WARN\"}[5m])",
+                        "legendFormat": "Warn Logs - {{job}}"
+                    }
+                ]
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "templating": {
+            "list": [
+                {
+                    "name": "namespace",
+                    "query": "label_values(namespace)",
+                    "type": "query"
+                }
+            ]
+        }
+    }
+}

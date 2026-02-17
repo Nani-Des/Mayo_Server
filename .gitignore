@@ -1,0 +1,52 @@
+# Java/Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.class
+*.jar
+*.war
+*.ear
+*.log
+
+# IDE
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.settings/
+.classpath
+.project
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+*.env
+
+# Docker
+.docker/
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Spring Boot
+HELP.md
+.mvn/timing.properties
+.mvn/wrapper/maven-wrapper.jar
+
+# Build artifacts
+build/
+out/
+bin/
+
+# Test
+.gradle/
+
+#Extras
+

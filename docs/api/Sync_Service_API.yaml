@@ -1,0 +1,164 @@
+openapi: 3.0.0
+info:
+  title: Sync Service API
+  version: 1.0.0
+  description: API for device pairing and synchronization in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/v1/devices/pair:
+    post:
+      summary: Pair a device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DevicePairRequest'
+      responses:
+        '201':
+          description: Device paired successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseDevice'
+  /api/v1/devices/{deviceId}:
+    delete:
+      summary: Unpair device
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: deviceId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Device unpaired successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+  /api/v1/devices:
+    get:
+      summary: List paired devices
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Devices retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListDevice'
+components:
+  schemas:
+    DevicePairRequest:
+      type: object
+      required:
+        - deviceId
+        - pairingMethod
+        - publicKey
+      properties:
+        deviceId:
+          type: string
+        pairingMethod:
+          $ref: '#/components/schemas/PairingMethod'
+        publicKey:
+          type: string
+    Device:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        deviceId:
+          type: string
+        deviceType:
+          $ref: '#/components/schemas/DeviceType'
+        pairingMethod:
+          $ref: '#/components/schemas/PairingMethod'
+        userId:
+          type: string
+          format: uuid
+        publicKey:
+          type: string
+        status:
+          $ref: '#/components/schemas/DeviceStatus'
+        lastSeen:
+          type: string
+          format: date-time
+        pairedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    ApiResponseDevice:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/Device'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListDevice:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Device'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseVoid:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    DeviceType:
+      type: string
+      enum: [MOBILE, DESKTOP, TABLET]
+    PairingMethod:
+      type: string
+      enum: [BLUETOOTH, WIFI, USB]
+    DeviceStatus:
+      type: string
+      enum: [PAIRED, ACTIVE, INACTIVE, BLOCKED]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

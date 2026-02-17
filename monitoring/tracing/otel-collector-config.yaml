@@ -1,0 +1,186 @@
+# OpenTelemetry Collector configuration for EMR distributed tracing
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+        tls:
+          cert_file: /etc/otel-collector/certs/otel-collector.crt
+          key_file: /etc/otel-collector/certs/otel-collector.key
+          ca_file: /etc/otel-collector/certs/ca.crt
+      http:
+        endpoint: 0.0.0.0:4318
+        tls:
+          cert_file: /etc/otel-collector/certs/otel-collector.crt
+          key_file: /etc/otel-collector/certs/otel-collector.key
+          ca_file: /etc/otel-collector/certs/ca.crt
+
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+      thrift_compact:
+        endpoint: 0.0.0.0:6831
+      thrift_binary:
+        endpoint: 0.0.0.0:6832
+
+  zipkin:
+    endpoint: 0.0.0.0:9411
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+    send_batch_max_size: 2048
+
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 5s
+
+  resource:
+    attributes:
+      - key: service.namespace
+        value: "emr"
+        action: insert
+      - key: service.version
+        value: "1.0.0"
+        action: insert
+      - key: environment
+        value: "${ENVIRONMENT:-production}"
+        action: insert
+      - key: cluster
+        value: "${CLUSTER_NAME:-emr-cluster}"
+        action: insert
+
+  attributes:
+    actions:
+      - key: http.method
+        action: delete
+      - key: http.url
+        action: delete
+      - key: http.scheme
+        action: delete
+      - key: http.host
+        action: delete
+      - key: http.target
+        action: delete
+      - key: http.user_agent
+        action: delete
+      - key: http.request_content_length
+        action: delete
+      - key: http.response_content_length
+        action: delete
+      - key: net.transport
+        action: delete
+      - key: net.peer.ip
+        action: delete
+      - key: net.peer.port
+        action: delete
+      - key: net.peer.name
+        action: delete
+      - key: enduser.id
+        action: hash
+      - key: enduser.role
+        action: delete
+      - key: db.statement
+        action: delete
+      - key: db.connection_string
+        action: delete
+
+  spanmetrics:
+    metrics_exporter: prometheus
+    latency_histogram_buckets: [100us, 1ms, 2ms, 6ms, 10ms, 100ms, 250ms]
+    dimensions_cache_size: 1000
+    aggregation_temporality: "AGGREGATION_TEMPORALITY_CUMULATIVE"
+    dimensions:
+      - name: http.method
+      - name: http.status_code
+      - name: service.name
+      - name: service.namespace
+
+  tail_sampling:
+    decision_wait: 30s
+    num_traces: 100
+    expected_new_traces_per_sec: 10
+    policies:
+      - name: errors-policy
+        type: status_code
+        status_code:
+          status_codes: ["ERROR", "UNSET"]
+      - name: slow-traces-policy
+        type: latency
+        latency:
+          threshold_ms: 5000
+      - name: health-check-policy
+        type: string_attribute
+        string_attribute:
+          key: http.url
+          values: ["/health", "/ready", "/live"]
+          enabled: false
+      - name: probabilistic-policy
+        type: probabilistic
+        probabilistic:
+          sampling_percentage: 10
+
+exporters:
+  jaeger:
+    endpoint: "jaeger-collector:14268"
+    tls:
+      insecure: true
+
+  zipkin:
+    endpoint: "http://zipkin:9411/api/v2/spans"
+    format: proto
+
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: "otel"
+    const_labels:
+      service: "opentelemetry-collector"
+
+  logging:
+    loglevel: debug
+
+  elasticsearch:
+    endpoints: ["https://elasticsearch:9200"]
+    user: "${ELASTICSEARCH_USER}"
+    password: "${ELASTICSEARCH_PASSWORD}"
+    tls:
+      ca_file: "/etc/otel-collector/certs/ca.crt"
+      cert_file: "/etc/otel-collector/certs/otel-collector.crt"
+      key_file: "/etc/otel-collector/certs/otel-collector.key"
+    index: "otel-traces-%{+yyyy.MM.dd}"
+    mapping:
+      - mtype: span
+        index: "otel-spans-%{+yyyy.MM.dd}"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, jaeger, zipkin]
+      processors: [memory_limiter, resource, attributes, tail_sampling, batch]
+      exporters: [jaeger, elasticsearch, logging]
+
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, resource, batch]
+      exporters: [prometheus, logging]
+
+  extensions:
+    health_check:
+      endpoint: "0.0.0.0:13133"
+
+    pprof:
+      endpoint: "0.0.0.0:1777"
+
+    zpages:
+      endpoint: "0.0.0.0:55679"
+
+  telemetry:
+    logs:
+      level: "info"
+    metrics:
+      address: "0.0.0.0:8888"

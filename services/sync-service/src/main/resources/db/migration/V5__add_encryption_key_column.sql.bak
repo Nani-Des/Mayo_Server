@@ -1,0 +1,19 @@
+-- Sync Service Database Migration
+-- V5: Add encryption_key column to user_backup_preferences table
+
+-- Add encryption_key column to user_backup_preferences table
+ALTER TABLE user_backup_preferences ADD COLUMN encryption_key TEXT;
+
+-- Add last_backup_date column
+ALTER TABLE user_backup_preferences ADD COLUMN last_backup_date TIMESTAMP;
+
+-- Update existing records if needed
+UPDATE user_backup_preferences SET encryption_key = encryption_key_hash WHERE encryption_key_hash IS NOT NULL;
+
+-- Rename last_backup_at to last_backup_date if it exists
+DO $
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_backup_preferences' AND column_name = 'last_backup_at') THEN
+        ALTER TABLE user_backup_preferences RENAME COLUMN last_backup_at TO last_backup_date;
+    END IF;
+END $;

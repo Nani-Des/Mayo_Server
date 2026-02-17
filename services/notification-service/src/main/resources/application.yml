@@ -1,0 +1,190 @@
+server:
+  port: 8450
+  ssl:
+    enabled: false
+    key-store: classpath:certs/server/keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: server
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_CHACHA20_POLY1305_SHA256
+
+spring:
+  application:
+    name: notification-service
+  security:
+    user:
+      password: dev_only_placeholder
+  output:
+    ansi:
+      enabled: ALWAYS
+  thymeleaf:
+    check-template-location: false
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:mayo_db}?currentSchema=notification
+    username: ${DB_USER:mayo}
+    password: ${DB_PASSWORD:mayo_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SQL_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: notification
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: notification
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: notification-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+  mail:
+    host: ${SMTP_HOST:smtp.gmail.com}
+    port: ${SMTP_PORT:587}
+    username: ${SMTP_USERNAME:}
+    password: ${SMTP_PASSWORD:}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 3000
+          writetimeout: 5000
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}    # 15 minutes
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000} # 7 days
+
+# Gateway Secret (for service authentication)
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+
+# Firebase Configuration
+firebase:
+  project-id: ${FCM_PROJECT_ID:mayo-emr}
+  credentials: classpath:firebase-service-account.json
+
+# APNs Configuration
+apns:
+  key-id: ${APNS_KEY_ID:ABC123DEF4}
+  team-id: ${APNS_TEAM_ID:DEF123GHI5}
+  bundle-id: ${APNS_BUNDLE_ID:com.mayo.emr}
+  private-key: classpath:apns-private-key.p8
+
+# Twilio Configuration
+twilio:
+  account-sid: ${TWILIO_ACCOUNT_SID:}
+  auth-token: ${TWILIO_AUTH_TOKEN:}
+  phone-number: ${TWILIO_PHONE_NUMBER:}
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: ${SQL_DEBUG:false}
+    com.google.firebase: INFO
+    com.eatthepath.pushy: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/notification-service.log
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when-authorized
+  prometheus:
+    metrics:
+     export:
+        enabled: true
+
+# Notification Service Configuration
+notification:
+  kafka:
+    consumer:
+      concurrency: 1
+      poll-timeout: 1000ms
+  delivery:
+    max-retries: 6
+    retry-delays: [1, 2, 4, 8, 16, 32]  # seconds
+    rate-limit:
+      requests-per-minute: 100
+    channels:
+      fcm:
+        enabled: true
+      apns:
+        enabled: true
+      email:
+        enabled: true
+      sms:
+        enabled: true
+  templates:
+    cache-ttl: 3600000  # 1 hour
+    default-language: en
+  security:
+    encryption-enabled: true
+    token-rotation-days: 30
+  monitoring:
+    metrics-enabled: true
+    alert-thresholds:
+      failure-rate: 0.05  # 5%
+      queue-depth: 1000

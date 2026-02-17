@@ -1,0 +1,337 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: monitoring-network-policy
+  namespace: monitoring
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: emr-services
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - namespaceSelector:
+        matchLabels:
+          name: cert-manager
+    ports:
+    - protocol: TCP
+      port: 9090  # Prometheus
+    - protocol: TCP
+      port: 3000  # Grafana
+    - protocol: TCP
+      port: 9200  # Elasticsearch
+    - protocol: TCP
+      port: 5601  # Kibana
+    - protocol: TCP
+      port: 16686 # Jaeger
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 9200  # Elasticsearch from Prometheus
+    - protocol: TCP
+      port: 9300  # Elasticsearch transport
+  - from:
+    - podSelector:
+        matchLabels:
+          app: logstash
+    ports:
+    - protocol: TCP
+      port: 9200  # Elasticsearch from Logstash
+  - from:
+    - podSelector:
+        matchLabels:
+          app: jaeger
+    ports:
+    - protocol: TCP
+      port: 9200  # Elasticsearch from Jaeger
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: emr-services
+    ports:
+    - protocol: TCP
+      port: 8080  # Service metrics endpoints
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: TCP
+      port: 443  # Kubernetes API
+    - protocol: TCP
+      port: 53   # DNS
+    - protocol: UDP
+      port: 53   # DNS
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 9200  # Elasticsearch
+    - protocol: TCP
+      port: 9300  # Elasticsearch transport
+  - to:
+    - ipBlock:
+        cidr: 0.0.0.0/0
+    ports:
+    - protocol: TCP
+      port: 80   # HTTP for external APIs
+    - protocol: TCP
+      port: 443  # HTTPS for external APIs
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: grafana-secret
+  namespace: monitoring
+type: Opaque
+data:
+  admin-password: <base64-encoded-password>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: elasticsearch-secret
+  namespace: monitoring
+type: Opaque
+data:
+  elastic-password: <base64-encoded-password>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: monitoring-tls
+  namespace: monitoring
+type: kubernetes.io/tls
+data:
+  tls.crt: <base64-encoded-cert>
+  tls.key: <base64-encoded-key>
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: monitoring-certificate
+  namespace: monitoring
+spec:
+  secretName: monitoring-tls
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+  - monitoring.emr-system.com
+  - prometheus.emr-system.com
+  - grafana.emr-system.com
+  - kibana.emr-system.com
+  - jaeger.emr-system.com
+---
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: monitoring-psp
+  namespace: monitoring
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  allowedCapabilities: []
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: MustRunAsNonRoot
+  runAsGroup:
+    rule: MustRunAs
+    ranges:
+    - min: 1000
+      max: 65535
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: MustRunAs
+    ranges:
+    - min: 1000
+      max: 65535
+  fsGroup:
+    rule: MustRunAs
+    ranges:
+    - min: 1000
+      max: 65535
+  readOnlyRootFilesystem: true
+  volumes:
+    - configMap
+    - emptyDir
+    - persistentVolumeClaim
+    - secret
+    - projected
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: monitoring-admin
+  namespace: monitoring
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["monitoring.coreos.com"]
+  resources: ["prometheuses", "servicemonitors", "alertmanagers"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: monitoring-admin-binding
+  namespace: monitoring
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: monitoring-admin
+subjects:
+- kind: Group
+  name: monitoring-admins
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: monitoring-quota
+  namespace: monitoring
+spec:
+  hard:
+    requests.cpu: "8"
+    requests.memory: 32Gi
+    limits.cpu: "16"
+    limits.memory: 64Gi
+    persistentvolumeclaims: "10"
+    pods: "50"
+    services: "20"
+    secrets: "20"
+    configmaps: "50"
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: monitoring-limits
+  namespace: monitoring
+spec:
+  limits:
+  - type: Container
+    default:
+      cpu: 1000m
+      memory: 2Gi
+    defaultRequest:
+      cpu: 100m
+      memory: 256Mi
+    max:
+      cpu: 4000m
+      memory: 8Gi
+    min:
+      cpu: 50m
+      memory: 128Mi
+  - type: PersistentVolumeClaim
+    max:
+      storage: 100Gi
+    min:
+      storage: 1Gi
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: monitoring-backup
+  namespace: monitoring
+spec:
+  schedule: "0 2 * * *"  # Daily at 2 AM
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: backup
+            image: monitoring/backup-tool:latest
+            command: ["/bin/bash", "-c"]
+            args:
+            - |
+              # Backup configurations
+              kubectl get configmaps -n monitoring -o yaml > /backup/configmaps-$(date +%Y%m%d).yaml
+              kubectl get secrets -n monitoring -o yaml > /backup/secrets-$(date +%Y%m%d).yaml
+
+              # Backup Elasticsearch indices
+              curl -X PUT "elasticsearch:9200/_snapshot/backup-$(date +%Y%m%d)" -H 'Content-Type: application/json' -d'
+              {
+                "type": "fs",
+                "settings": {
+                  "location": "/backup/elasticsearch"
+                }
+              }'
+
+              # Upload to S3
+              aws s3 cp /backup/ s3://emr-monitoring-backups/$(date +%Y%m%d)/ --recursive
+            volumeMounts:
+            - name: backup-volume
+              mountPath: /backup
+            env:
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secret
+                  key: aws-access-key-id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: backup-secret
+                  key: aws-secret-access-key
+          restartPolicy: OnFailure
+          volumes:
+          - name: backup-volume
+            emptyDir: {}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: monitoring-health-rules
+  namespace: monitoring
+spec:
+  groups:
+  - name: monitoring-health
+    rules:
+    - alert: MonitoringStackDown
+      expr: up{job=~"prometheus|grafana|elasticsearch|kibana|jaeger"} == 0
+      for: 5m
+      labels:
+        severity: critical
+        component: monitoring
+      annotations:
+        summary: "Monitoring component {{ $labels.job }} is down"
+        description: "Monitoring component {{ $labels.job }} has been down for more than 5 minutes"
+
+    - alert: MonitoringHighResourceUsage
+      expr: (container_memory_usage_bytes{pod=~"prometheus-.*|grafana-.*|elasticsearch-.*"} / container_spec_memory_limit_bytes) > 0.9
+      for: 10m
+      labels:
+        severity: warning
+        component: monitoring
+      annotations:
+        summary: "High resource usage in monitoring component"
+        description: "Monitoring component {{ $labels.pod }} is using {{ $value }}% of memory limit"
+
+    - alert: MonitoringDataLoss
+      expr: increase(prometheus_tsdb_head_samples_appended_total[5m]) == 0
+      for: 10m
+      labels:
+        severity: critical
+        component: prometheus
+      annotations:
+        summary: "Prometheus data ingestion stopped"
+        description: "Prometheus has not received new samples for 10 minutes"

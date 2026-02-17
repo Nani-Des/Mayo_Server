@@ -1,0 +1,189 @@
+server:
+  port: 8448
+  ssl:
+    enabled: false
+    key-store: classpath:certs/server/keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: server
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_CHACHA20_POLY1305_SHA256
+
+spring:
+  application:
+    name: sync-service
+  security:
+    user:
+      password: dev_only_placeholder
+  output:
+    ansi:
+      enabled: ALWAYS
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:mayo_db}?currentSchema=sync
+    username: ${DB_USER:mayo}
+    password: ${DB_PASSWORD:mayo_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SQL_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: sync
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    validate-on-migrate: false
+    locations: classpath:db/migration
+    schemas: sync
+
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      timeout: 5000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: sync-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+
+# Gateway Secret (for service authentication)
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+# gRPC Configuration
+grpc:
+  server:
+    port: 9090
+  client:
+    sync-service:
+      address: 'static://localhost:9090'
+      negotiation-type: plaintext
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}    # 15 minutes
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000} # 7 days
+
+# Encryption Configuration
+encryption:
+  aes:
+    key: ${ENCRYPTION_AES_KEY:changeme-this-is-not-secure-for-production-use-at-least-32-bytes-base64-encoded}
+
+# Firebase Configuration (for push notifications)
+firebase:
+  config-path: ${FIREBASE_CONFIG_PATH:classpath:firebase-config.json}
+
+# Supabase (Optional - for OAuth adapter)
+supabase:
+  enabled: ${SUPABASE_ENABLED:false}
+  url: ${SUPABASE_URL:}
+  anon-key: ${SUPABASE_ANON_KEY:}
+  service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: ${SQL_DEBUG:false}
+    io.grpc: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/sync-service.log
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Sync Service Configuration
+sync:
+  max-conflicts-per-session: 100
+  session-timeout-minutes: 30
+  delta-retention-days: 30
+  versioning:
+    enabled: true
+    max-versions-per-record: 10
+
+# Device Pairing Configuration
+device:
+  pairing:
+    challenge-timeout: 300  # seconds
+    jwt-expiry-hours: 720   # 30 days
+    bluetooth:
+      enabled: true
+      discovery-timeout: 30
+    wifi:
+      enabled: true
+      qr-code-timeout: 600  # 10 minutes
+    usb:
+      enabled: true
+      connection-timeout: 30
+
+# Push Notification Configuration
+notification:
+  service:
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8083}
+  firebase:
+    server-key: ${FIREBASE_SERVER_KEY:}
+    config-path: ${FIREBASE_CONFIG_PATH:}
+  apns:
+    enabled: ${APNS_ENABLED:false}
+    key-id: ${APNS_KEY_ID:}
+    team-id: ${APNS_TEAM_ID:}
+    bundle-id: ${APNS_BUNDLE_ID:}
+
+# Delta Sync Configuration
+delta:
+  sync:
+    cache-ttl-hours: 24
+    max-changes-per-request: 1000
+    compression-enabled: true

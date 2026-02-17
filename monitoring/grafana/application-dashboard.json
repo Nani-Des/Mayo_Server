@@ -1,0 +1,191 @@
+{
+    "dashboard": {
+        "title": "EMR Application Metrics Dashboard",
+        "tags": [
+            "emr",
+            "application",
+            "metrics"
+        ],
+        "timezone": "UTC",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Patient Record Operations",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(patient_record_operations_total{operation=\"create\"}[5m])",
+                        "legendFormat": "Create Operations"
+                    },
+                    {
+                        "expr": "rate(patient_record_operations_total{operation=\"read\"}[5m])",
+                        "legendFormat": "Read Operations"
+                    },
+                    {
+                        "expr": "rate(patient_record_operations_total{operation=\"update\"}[5m])",
+                        "legendFormat": "Update Operations"
+                    },
+                    {
+                        "expr": "rate(patient_record_operations_total{operation=\"delete\"}[5m])",
+                        "legendFormat": "Delete Operations"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Sync Operations",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(sync_operations_total[5m])",
+                        "legendFormat": "Sync Operations"
+                    },
+                    {
+                        "expr": "rate(sync_conflicts_total[5m])",
+                        "legendFormat": "Sync Conflicts"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "Audit Events",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(audit_events_total[5m])",
+                        "legendFormat": "Audit Events - {{action}}"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "Notification Delivery",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(notifications_sent_total[5m])",
+                        "legendFormat": "Notifications Sent"
+                    },
+                    {
+                        "expr": "rate(notifications_failed_total[5m])",
+                        "legendFormat": "Notifications Failed"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "Hospital Integration",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(hospital_data_transfers_total[5m])",
+                        "legendFormat": "Data Transfers"
+                    },
+                    {
+                        "expr": "rate(hospital_integration_errors_total[5m])",
+                        "legendFormat": "Integration Errors"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "API Usage by Endpoint",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "rate(http_requests_total[5m])",
+                        "legendFormat": "{{method}} {{uri}}"
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "title": "Business Logic Performance",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "histogram_quantile(0.95, rate(business_operation_duration_seconds_bucket[5m]))",
+                        "legendFormat": "95th percentile - {{operation}}"
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "title": "Data Validation Errors",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(data_validation_errors_total[5m])",
+                        "legendFormat": "Validation Errors - {{field}}"
+                    }
+                ]
+            },
+            {
+                "id": 9,
+                "title": "User Activity",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(user_sessions_total[5m])",
+                        "legendFormat": "User Sessions"
+                    },
+                    {
+                        "expr": "rate(user_actions_total[5m])",
+                        "legendFormat": "User Actions - {{action_type}}"
+                    }
+                ]
+            },
+            {
+                "id": 10,
+                "title": "Compliance Metrics",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "hipaa_compliance_score",
+                        "legendFormat": "HIPAA Score"
+                    },
+                    {
+                        "expr": "data_retention_compliance",
+                        "legendFormat": "Retention Compliance"
+                    }
+                ]
+            },
+            {
+                "id": 11,
+                "title": "Data Export Jobs",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "data_export_jobs_total",
+                        "legendFormat": "{{status}} - {{export_type}}"
+                    }
+                ]
+            },
+            {
+                "id": 12,
+                "title": "Device Sync Status",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "device_sync_status",
+                        "legendFormat": "{{device_id}} - {{status}}"
+                    }
+                ]
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "templating": {
+            "list": [
+                {
+                    "name": "service",
+                    "query": "label_values(service)",
+                    "type": "query"
+                }
+            ]
+        }
+    }
+}

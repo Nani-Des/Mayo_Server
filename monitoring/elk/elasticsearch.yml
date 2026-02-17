@@ -1,0 +1,92 @@
+# Elasticsearch configuration for EMR logging
+cluster.name: emr-logging-cluster
+node.name: ${HOSTNAME}
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+
+# Network settings
+network.host: 0.0.0.0
+http.port: 9200
+discovery.type: single-node
+
+# Security settings
+xpack.security.enabled: true
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.verification_mode: certificate
+xpack.security.transport.ssl.keystore.path: /usr/share/elasticsearch/config/certs/elastic-certificates.p12
+xpack.security.transport.ssl.truststore.path: /usr/share/elasticsearch/config/certs/elastic-certificates.p12
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.keystore.path: /usr/share/elasticsearch/config/certs/elastic-certificates.p12
+xpack.security.http.ssl.truststore.path: /usr/share/elasticsearch/config/certs/elastic-certificates.p12
+
+# TLS settings
+xpack.security.http.ssl.client_authentication: optional
+
+# Memory settings
+bootstrap.memory_lock: true
+
+# JVM settings (set via environment variables)
+# ES_JAVA_OPTS="-Xms2g -Xmx2g"
+
+# Index settings
+index.codec: best_compression
+
+# Audit logging
+xpack.security.audit.enabled: true
+xpack.security.audit.outputs: [index, logfile]
+
+# Monitoring
+xpack.monitoring.enabled: true
+xpack.monitoring.collection.enabled: true
+
+# Machine Learning (optional)
+xpack.ml.enabled: false
+
+# Watcher (for alerting)
+xpack.watcher.enabled: true
+
+# Index lifecycle management
+xpack.ilm.enabled: true
+
+# Snapshot repository
+path.repo: ["/usr/share/elasticsearch/snapshots"]
+
+# Thread pools
+thread_pool.write.queue_size: 1000
+thread_pool.search.queue_size: 1000
+
+# Circuit breaker settings
+indices.breaker.total.limit: 70%
+indices.breaker.fielddata.limit: 40%
+
+# Field data cache
+indices.fielddata.cache.size: 20%
+
+# Query cache
+indices.queries.cache.size: 10%
+
+# Request cache
+indices.requests.cache.size: 1%
+
+# Refresh interval
+index.refresh_interval: 30s
+
+# Number of replicas (set to 0 for single node)
+index.number_of_replicas: 0
+
+# Auto-create indices
+action.auto_create_index: ".monitoring-*, .watcher-*, .triggered_watches-*, .watches-*, .alerts-*, emr-*"
+
+# Retention settings
+xpack.ilm.poll_interval: 1m
+
+# Cluster settings
+cluster.routing.allocation.disk.threshold_enabled: true
+cluster.routing.allocation.disk.watermark.low: 85%
+cluster.routing.allocation.disk.watermark.high: 90%
+cluster.routing.allocation.disk.watermark.flood_stage: 95%
+
+# Logging
+logger.org.elasticsearch.discovery: INFO
+logger.org.elasticsearch.cluster.service: INFO
+logger.org.elasticsearch.indices.recovery: INFO

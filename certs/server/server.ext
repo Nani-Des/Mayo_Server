@@ -1,0 +1,18 @@
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = api.mayo-health.gh
+DNS.2 = gateway.mayo-emr.svc.cluster.local
+DNS.3 = auth-service.mayo-emr.svc.cluster.local
+DNS.4 = patient-service.mayo-emr.svc.cluster.local
+DNS.5 = medical-record-service.mayo-emr.svc.cluster.local
+DNS.6 = sync-service.mayo-emr.svc.cluster.local
+DNS.7 = audit-service.mayo-emr.svc.cluster.local
+DNS.8 = notification-service.mayo-emr.svc.cluster.local
+DNS.9 = hospital-integration-service.mayo-emr.svc.cluster.local
+DNS.10 = localhost
+IP.1 = 127.0.0.1

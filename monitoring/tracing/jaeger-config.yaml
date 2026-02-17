@@ -1,0 +1,86 @@
+# Jaeger configuration for EMR distributed tracing
+service:
+  extensions:
+    - jaeger_storage
+    - jaeger_query
+    - jaeger_query_ui
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [jaeger_storage_exporter]
+
+extensions:
+  jaeger_storage:
+    backends:
+      elasticsearch:
+        server_urls: ["https://elasticsearch:9200"]
+        index_prefix: "jaeger"
+        username: "${ELASTICSEARCH_USER}"
+        password: "${ELASTICSEARCH_PASSWORD}"
+        tls:
+          ca_file: "/etc/jaeger/certs/ca.crt"
+          cert_file: "/etc/jaeger/certs/jaeger.crt"
+          key_file: "/etc/jaeger/certs/jaeger.key"
+        max_doc_count: 10000
+        max_span_age: 72h
+        create_index_templates: true
+        version: 7
+        tags_as_fields:
+          all: true
+        use_aliases: true
+
+  jaeger_query:
+    ui_config: /etc/jaeger/ui-config.json
+    menu_enabled: true
+    services:
+      - name: "EMR Services"
+        operations: ["*"]
+    trace_config:
+      service_name: "emr-gateway"
+      tags: ["error=true"]
+    archive_enabled: true
+    archive_config:
+      enabled: true
+      backend: elasticsearch
+
+  jaeger_query_ui:
+    base_path: /
+    dependencies:
+      query_service: jaeger_query
+      menu_enabled: true
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    send_batch_size: 1024
+    timeout: 1s
+
+exporters:
+  jaeger_storage_exporter:
+    backend: elasticsearch
+
+# Additional configuration for production readiness
+logging:
+  level: info
+
+metrics:
+  addr: 0.0.0.0:8888
+  route: /metrics
+
+health_check:
+  http:
+    endpoint: 0.0.0.0:13133
+
+pprof:
+  endpoint: 0.0.0.0:1777
+
+zpages:
+  endpoint: 0.0.0.0:55679

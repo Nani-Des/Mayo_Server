@@ -1,0 +1,1068 @@
+openapi: 3.0.0
+info:
+  title: Patient Record Service API
+  version: 1.0.0
+  description: API for managing patient records and related medical data in the Mayo EMR system
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+paths:
+  /api/patients:
+    get:
+      summary: Get all patients
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of patients
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListPatientDto'
+    post:
+      summary: Create a new patient
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientDto'
+      responses:
+        '201':
+          description: Patient created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientDto'
+  /api/patients/{id}:
+    get:
+      summary: Get patient by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Patient found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientDto'
+        '404':
+          description: Patient not found
+    put:
+      summary: Update patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientDto'
+      responses:
+        '200':
+          description: Patient updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientDto'
+        '404':
+          description: Patient not found
+    delete:
+      summary: Delete patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Patient deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+        '404':
+          description: Patient not found
+  /api/patients/{patientId}/transfer-ownership:
+    post:
+      summary: Initiate ownership transfer for a patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InitiateOwnershipTransferRequest'
+      responses:
+        '201':
+          description: Ownership transfer initiated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOwnershipTransferDto'
+  /api/patients/transfers/{transferId}/confirm:
+    post:
+      summary: Confirm ownership transfer
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: transferId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ownership transfer confirmed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseOwnershipTransferDto'
+  /api/patients/{patientId}/ownership-history:
+    get:
+      summary: Get ownership transfer history for a patient
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Ownership transfer history
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListOwnershipTransferHistoryDto'
+  /api/patient-records:
+    post:
+      summary: Create a new patient record
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRecordDto'
+      responses:
+        '201':
+          description: Patient record created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientRecordDto'
+  /api/patient-records/{id}:
+    get:
+      summary: Get patient record by ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Patient record found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientRecordDto'
+        '404':
+          description: Patient record not found
+    put:
+      summary: Update patient record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatientRecordDto'
+      responses:
+        '200':
+          description: Patient record updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponsePatientRecordDto'
+        '404':
+          description: Patient record not found
+    delete:
+      summary: Delete patient record
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Patient record deleted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVoid'
+        '404':
+          description: Patient record not found
+  /api/patient-records/patient/{patientId}:
+    get:
+      summary: Get patient records by patient ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Patient records retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListPatientRecordDto'
+  /api/patient-records/lab-results:
+    post:
+      summary: Create a new lab result
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabResultDto'
+      responses:
+        '201':
+          description: Lab result created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseLabResultDto'
+  /api/patient-records/lab-results/patient-record/{patientRecordId}:
+    get:
+      summary: Get lab results by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Lab results retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListLabResultDto'
+  /api/patient-records/imaging-studies:
+    post:
+      summary: Create a new imaging study
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ImagingStudyDto'
+      responses:
+        '201':
+          description: Imaging study created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseImagingStudyDto'
+  /api/patient-records/imaging-studies/patient-record/{patientRecordId}:
+    get:
+      summary: Get imaging studies by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Imaging studies retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListImagingStudyDto'
+  /api/patient-records/vital-signs:
+    post:
+      summary: Create new vital signs
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/VitalSignsDto'
+      responses:
+        '201':
+          description: Vital signs created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseVitalSignsDto'
+  /api/patient-records/vital-signs/patient-record/{patientRecordId}:
+    get:
+      summary: Get vital signs by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Vital signs retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListVitalSignsDto'
+  /api/patient-records/medications:
+    post:
+      summary: Create a new medication
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MedicationDto'
+      responses:
+        '201':
+          description: Medication created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseMedicationDto'
+  /api/patient-records/medications/patient-record/{patientRecordId}:
+    get:
+      summary: Get medications by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Medications retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListMedicationDto'
+  /api/patient-records/medications/active/patient-record/{patientRecordId}:
+    get:
+      summary: Get active medications by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active medications retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListMedicationDto'
+  /api/patient-records/allergies:
+    post:
+      summary: Create a new allergy
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AllergyDto'
+      responses:
+        '201':
+          description: Allergy created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseAllergyDto'
+  /api/patient-records/allergies/patient-record/{patientRecordId}:
+    get:
+      summary: Get allergies by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Allergies retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListAllergyDto'
+  /api/patient-records/allergies/active/patient-record/{patientRecordId}:
+    get:
+      summary: Get active allergies by patient record ID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: patientRecordId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Active allergies retrieved
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResponseListAllergyDto'
+components:
+  schemas:
+    PatientDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        medicalRecordNumber:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+        email:
+          type: string
+        dateOfBirth:
+          type: string
+          format: date
+        gender:
+          type: string
+        contactInfo:
+          type: string
+        ownerId:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    PatientRecordDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        recordType:
+          $ref: '#/components/schemas/RecordType'
+        title:
+          type: string
+        description:
+          type: string
+        metadata:
+          type: object
+        createdBy:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    InitiateOwnershipTransferRequest:
+      type: object
+      required:
+        - newOwnerId
+      properties:
+        newOwnerId:
+          type: string
+          format: uuid
+        reason:
+          type: string
+        confirmationRequired:
+          type: boolean
+          default: true
+    OwnershipTransferDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        previousOwnerId:
+          type: string
+          format: uuid
+        newOwnerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        reason:
+          type: string
+        initiatedBy:
+          type: string
+          format: uuid
+        confirmedBy:
+          type: string
+          format: uuid
+        initiatedAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    OwnershipTransferHistoryDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        previousOwnerId:
+          type: string
+          format: uuid
+        newOwnerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        reason:
+          type: string
+        initiatedBy:
+          type: string
+          format: uuid
+        confirmedBy:
+          type: string
+          format: uuid
+        initiatedAt:
+          type: string
+          format: date-time
+        confirmedAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        version:
+          type: integer
+    LabResultDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRecordId:
+          type: string
+          format: uuid
+        testName:
+          type: string
+        testCode:
+          type: string
+        resultValue:
+          type: string
+        unit:
+          type: string
+        referenceRange:
+          type: string
+        status:
+          type: string
+        performedAt:
+          type: string
+          format: date-time
+        reportedAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ImagingStudyDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRecordId:
+          type: string
+          format: uuid
+        studyType:
+          type: string
+        description:
+          type: string
+        performedAt:
+          type: string
+          format: date-time
+        imageUrls:
+          type: array
+          items:
+            type: string
+        report:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    VitalSignsDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRecordId:
+          type: string
+          format: uuid
+        bloodPressureSystolic:
+          type: number
+        bloodPressureDiastolic:
+          type: number
+        heartRate:
+          type: integer
+        temperature:
+          type: number
+        respiratoryRate:
+          type: integer
+        oxygenSaturation:
+          type: number
+        weight:
+          type: number
+        height:
+          type: number
+        measuredAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    MedicationDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRecordId:
+          type: string
+          format: uuid
+        medicationName:
+          type: string
+        dosage:
+          type: string
+        frequency:
+          type: string
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        prescribedBy:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    AllergyDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        patientRecordId:
+          type: string
+          format: uuid
+        allergen:
+          type: string
+        reaction:
+          type: string
+        severity:
+          type: string
+        status:
+          type: string
+        onsetDate:
+          type: string
+          format: date
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    ApiResponsePatientDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PatientDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListPatientDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatientDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponsePatientRecordDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/PatientRecordDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListPatientRecordDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/PatientRecordDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseOwnershipTransferDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/OwnershipTransferDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListOwnershipTransferHistoryDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OwnershipTransferHistoryDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseLabResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/LabResultDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListLabResultDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/LabResultDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseImagingStudyDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/ImagingStudyDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListImagingStudyDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ImagingStudyDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseVitalSignsDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/VitalSignsDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListVitalSignsDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/VitalSignsDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseMedicationDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/MedicationDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListMedicationDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/MedicationDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseAllergyDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          $ref: '#/components/schemas/AllergyDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseListAllergyDto:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllergyDto'
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    ApiResponseVoid:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          nullable: true
+        timestamp:
+          type: string
+          format: date-time
+        requestId:
+          type: string
+    RecordType:
+      type: string
+      enum: [DIAGNOSIS, PRESCRIPTION, LAB_TEST, VISIT, NOTE, LAB_RESULT, IMAGING_STUDY, VITAL_SIGNS, MEDICATION, ALLERGY, PROCEDURE, IMMUNIZATION, FAMILY_HISTORY, SOCIAL_HISTORY]
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

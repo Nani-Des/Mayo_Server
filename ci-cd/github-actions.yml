@@ -1,0 +1,295 @@
+name: Mayo EMR CI/CD Pipeline
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Cache Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: maven-${{ hashFiles('**/pom.xml') }}
+          restore-keys: maven-
+
+      - name: Build All Services
+        run: mvn clean compile -DskipTests
+
+      - name: Run Unit Tests
+        run: mvn test
+
+      - name: Run Integration Tests
+        run: mvn verify -P integration-tests
+
+      - name: Run Security Tests
+        run: |
+          # Run OWASP ZAP baseline scan
+          docker run --rm -v $(pwd):/zap/wrk owasp/zap2docker-stable zap-baseline.py \
+            -t http://localhost:8080 \
+            -r zap-report.html || true
+
+      - name: Run Performance Tests
+        run: |
+          # Run JMeter performance tests
+          docker run --rm -v $(pwd)/testing/performance:/tests \
+            -v $(pwd)/test-results:/results \
+            justb4/jmeter:latest \
+            -n -t /tests/national-scale-load-test.jmx \
+            -l /results/results.jtl
+
+      - name: Generate Test Reports
+        run: |
+          mvn surefire-report:report
+          mvn surefire-report:report-only
+          mvn site -DgenerateReports=false
+
+      - name: Upload Test Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: |
+            target/surefire-reports/
+            target/site/
+            zap-report.html
+            test-results/
+
+      - name: Build Docker Images
+        run: |
+          # Build all service images
+          services=("auth-service" "patient-service" "medical-record-service" "sync-service" "audit-service" "notification-service" "hospital-integration-service" "gateway")
+          for service in "${services[@]}"; do
+            if [ -d "services/$service" ]; then
+              docker build -t mayo/$service:latest services/$service
+            fi
+          done
+
+      - name: Extract metadata
+        id: meta
+        run: |
+          echo "tags=ghcr.io/${{ github.repository }}:latest" >> $GITHUB_OUTPUT
+          echo "tags=ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
+  security-scan:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for vulnerabilities
+        uses: snyk/actions/maven@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=high
+
+      - name: Build Docker Images for Scanning
+        run: |
+          services=("auth-service" "patient-service" "medical-record-service" "sync-service" "audit-service" "notification-service" "hospital-integration-service" "gateway")
+          for service in "${services[@]}"; do
+            if [ -d "services/$service" ]; then
+              docker build -t mayo/$service:latest services/$service
+            fi
+          done
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'image'
+          scan-ref: 'mayo/auth-service:latest,mayo/patient-service:latest,mayo/medical-record-service:latest,mayo/sync-service:latest,mayo/audit-service:latest,mayo/notification-service:latest,mayo/hospital-integration-service:latest,mayo/gateway:latest'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  build-and-push-images:
+    needs: security-scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and Push Docker Images
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy-staging:
+    needs: build-and-push-images
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.STAGING_KUBECONFIG }}
+
+      - name: Deploy to Staging with Canary
+        run: |
+          # Deploy canary version (10% of traffic)
+          sed -i 's/replicas: 3/replicas: 1/' infrastructure/kubernetes/regional-deployment.yaml
+          sed -i 's/app: auth-service/app: auth-service-canary/' infrastructure/kubernetes/regional-deployment.yaml
+
+          kubectl apply -f infrastructure/kubernetes/regional-deployment.yaml
+
+          # Wait for canary deployment
+          kubectl wait --for=condition=available --timeout=300s deployment/auth-service-canary -n mayo-emr
+
+          # Run health checks
+          sleep 60
+          kubectl exec -n mayo-emr deployment/auth-service-canary -- curl -f http://localhost:8081/actuator/health
+
+      - name: Validate Staging Deployment
+        run: |
+          # Check pod status
+          kubectl get pods -n mayo-emr
+
+          # Check service endpoints
+          kubectl get svc -n mayo-emr
+
+          # Query Prometheus for health metrics
+          PROMETHEUS_URL="http://prometheus-server.monitoring.svc.cluster.local"
+          curl -s "${PROMETHEUS_URL}/api/v1/query?query=up{job=\"auth-service\"}" | jq '.data.result[0].value[1]'
+
+      - name: Scale to Full Deployment
+        run: |
+          # Scale canary to full deployment
+          kubectl scale deployment auth-service-canary --replicas=3 -n mayo-emr
+
+          # Wait for rollout
+          kubectl rollout status deployment/auth-service-canary -n mayo-emr
+
+  validate-staging:
+    needs: deploy-staging
+    runs-on: ubuntu-latest
+    environment: staging
+    if: github.ref == 'refs/heads/develop'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.STAGING_KUBECONFIG }}
+
+      - name: Run Integration Tests Against Staging
+        run: |
+          # Run E2E tests against staging environment
+          mvn test -Dtest=FamilyTransferJourneyTest -Dspring.profiles.active=e2e -Denv=staging
+
+      - name: Monitor Deployment Health
+        run: |
+          # Check monitoring alerts
+          PROMETHEUS_URL="http://prometheus-server.monitoring.svc.cluster.local"
+
+          # Check for critical alerts
+          ALERTS=$(curl -s "${PROMETHEUS_URL}/api/v1/alerts" | jq '.data.alerts[] | select(.state == "firing" and .labels.severity == "critical")')
+
+          if [ -n "$ALERTS" ]; then
+            echo "Critical alerts detected:"
+            echo "$ALERTS"
+            exit 1
+          fi
+
+          # Check service metrics
+          RESPONSE_TIME=$(curl -s "${PROMETHEUS_URL}/api/v1/query?query=http_request_duration_seconds{quantile=\"0.95\",service=\"auth-service\"}" | jq '.data.result[0].value[1]')
+
+          if (( $(echo "$RESPONSE_TIME > 2.0" | bc -l) )); then
+            echo "Response time too high: ${RESPONSE_TIME}s"
+            exit 1
+          fi
+
+  deploy-production:
+    needs: validate-staging
+    runs-on: ubuntu-latest
+    environment: production
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        uses: azure/k8s-set-context@v3
+        with:
+          method: kubeconfig
+          kubeconfig: ${{ secrets.PRODUCTION_KUBECONFIG }}
+
+      - name: Install Dependencies
+        run: |
+          # Install required tools
+          sudo apt-get update
+          sudo apt-get install -y jq openssl
+
+      - name: Run Production Deployment
+        run: |
+          # Set environment variables
+          export REGION="${{ vars.PRODUCTION_REGION }}"
+          export ENVIRONMENT="production"
+
+          # Run the comprehensive deployment script
+          chmod +x scripts/deploy-update.sh
+          ./scripts/deploy-update.sh ${{ github.sha }}

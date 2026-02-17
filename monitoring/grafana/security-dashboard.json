@@ -1,0 +1,205 @@
+{
+    "dashboard": {
+        "title": "EMR Security Monitoring Dashboard",
+        "tags": [
+            "emr",
+            "security",
+            "production"
+        ],
+        "timezone": "UTC",
+        "panels": [
+            {
+                "id": 1,
+                "title": "Security Events Overview",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "rate(audit_events_total{action=~\".*\"}[5m])",
+                        "legendFormat": "{{action}}"
+                    }
+                ]
+            },
+            {
+                "id": 2,
+                "title": "Failed Authentication Attempts",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(failed_login_attempts_total[5m])",
+                        "legendFormat": "Failed Logins"
+                    }
+                ]
+            },
+            {
+                "id": 3,
+                "title": "WAF Blocked Requests",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(waf_blocked_requests_total[5m])",
+                        "legendFormat": "Blocked Requests"
+                    }
+                ]
+            },
+            {
+                "id": 4,
+                "title": "Rate Limiting Events",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(rate_limit_exceeded_total[5m])",
+                        "legendFormat": "Rate Limit Hits"
+                    }
+                ]
+            },
+            {
+                "id": 5,
+                "title": "TLS Handshake Failures",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(tls_handshake_failures_total[5m])",
+                        "legendFormat": "TLS Failures"
+                    }
+                ]
+            },
+            {
+                "id": 6,
+                "title": "Security Alerts",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "security_alerts_total",
+                        "legendFormat": "{{alert_type}}"
+                    }
+                ]
+            },
+            {
+                "id": 7,
+                "title": "Compliance Violations",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "compliance_violations_total",
+                        "legendFormat": "{{violation_type}} - {{severity}}"
+                    }
+                ]
+            },
+            {
+                "id": 8,
+                "title": "Certificate Expiry Status",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "certificate_expiry_days",
+                        "legendFormat": "{{certificate_name}} - {{days_until_expiry}} days"
+                    }
+                ]
+            },
+            {
+                "id": 9,
+                "title": "Encryption Operations",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(encryption_operations_total[5m])",
+                        "legendFormat": "Encryption Ops"
+                    },
+                    {
+                        "expr": "rate(decryption_operations_total[5m])",
+                        "legendFormat": "Decryption Ops"
+                    }
+                ]
+            },
+            {
+                "id": 10,
+                "title": "Data Access Patterns",
+                "type": "heatmap",
+                "targets": [
+                    {
+                        "expr": "rate(data_access_total{access_type=\"read\"}[5m])",
+                        "legendFormat": "Read Access"
+                    },
+                    {
+                        "expr": "rate(data_access_total{access_type=\"write\"}[5m])",
+                        "legendFormat": "Write Access"
+                    }
+                ]
+            },
+            {
+                "id": 11,
+                "title": "User Session Anomalies",
+                "type": "graph",
+                "targets": [
+                    {
+                        "expr": "rate(session_anomalies_total[5m])",
+                        "legendFormat": "Session Anomalies"
+                    }
+                ]
+            },
+            {
+                "id": 12,
+                "title": "HIPAA Compliance Status",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "hipaa_compliance_score",
+                        "legendFormat": "Compliance Score"
+                    }
+                ]
+            },
+            {
+                "id": 13,
+                "title": "Security Incident Timeline",
+                "type": "timeline",
+                "targets": [
+                    {
+                        "expr": "security_incidents_total",
+                        "legendFormat": "{{incident_type}}"
+                    }
+                ]
+            },
+            {
+                "id": 14,
+                "title": "Device Certificate Validation",
+                "type": "table",
+                "targets": [
+                    {
+                        "expr": "device_certificate_status",
+                        "legendFormat": "{{device_id}} - {{status}}"
+                    }
+                ]
+            },
+            {
+                "id": 15,
+                "title": "Audit Log Integrity",
+                "type": "stat",
+                "targets": [
+                    {
+                        "expr": "audit_log_integrity_check",
+                        "legendFormat": "Integrity Status"
+                    }
+                ]
+            }
+        ],
+        "time": {
+            "from": "now-1h",
+            "to": "now"
+        },
+        "refresh": "30s",
+        "templating": {
+            "list": [
+                {
+                    "name": "namespace",
+                    "query": "label_values(namespace)",
+                    "type": "query"
+                },
+                {
+                    "name": "service",
+                    "query": "label_values(service)",
+                    "type": "query"
+                }
+            ]
+        }
+    }
+}

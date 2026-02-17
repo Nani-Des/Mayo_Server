@@ -1,0 +1,195 @@
+server:
+  port: 8447
+  ssl:
+    enabled: false
+    key-store: classpath:certs/server/keystore.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD:changeit}
+    key-store-type: PKCS12
+    key-alias: server
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_CHACHA20_POLY1305_SHA256
+
+spring:
+  application:
+    name: hospital-integration-service
+  security:
+    user:
+      password: dev_only_placeholder
+  output:
+    ansi:
+      enabled: ALWAYS
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5433}/${DB_NAME:mayo_db}?currentSchema=hospital_integration
+    username: ${DB_USER:mayo}
+    password: ${DB_PASSWORD:mayo_dev_password}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    show-sql: ${SQL_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: true
+        default_schema: hospital_integration
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    schemas: hospital_integration
+
+  data:
+    redis:
+        host: ${REDIS_HOST:localhost}
+        port: ${REDIS_PORT:6379}
+        timeout: 5000ms
+        lettuce:
+          pool:
+            max-active: 8
+            max-idle: 8
+            min-idle: 0
+
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: hospital-integration-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+
+gateway:
+  secret: ${GATEWAY_SECRET:d9f8a7b6c5e4d3c2b1a0987654321fedcba0123456789abcdef}
+
+# gRPC Configuration
+grpc:
+  server:
+    port: 9091
+  client:
+    hospital-integration-service:
+      address: 'static://localhost:9091'
+      negotiation-type: plaintext
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:changeme-this-is-not-secure-for-production-use-at-least-64-characters-long}
+  access-token-expiry: ${JWT_ACCESS_TOKEN_EXPIRY:900000}    # 15 minutes
+  refresh-token-expiry: ${JWT_REFRESH_TOKEN_EXPIRY:604800000} # 7 days
+
+# Encryption Configuration
+encryption:
+  aes:
+    key: ${ENCRYPTION_AES_KEY:changeme-this-is-not-secure-for-production-use-at-least-32-bytes-base64-encoded}
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+
+# Logging
+logging:
+  level:
+    root: INFO
+    com.mayo: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.integration: DEBUG
+    io.grpc: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %highlight(%-5level) %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/hospital-integration-service.log
+
+# Management
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when-authorized
+
+# Hospital Integration Service Configuration
+hospital-integration:
+  data-transfer:
+    max-concurrent-transfers: 5
+    transfer-timeout-minutes: 30
+    chunk-size-kb: 1024
+    retry-attempts: 3
+  device:
+    registration-timeout-minutes: 10
+    heartbeat-interval-seconds: 30
+    max-inactive-hours: 24
+  activity:
+    retention-days: 90
+    batch-size: 1000
+  access:
+    verification-cache-ttl-minutes: 15
+    max-verification-attempts: 5
+  dicom:
+    ae-title: ${DICOM_AE_TITLE:MAYO_HOSPITAL}
+    port: ${DICOM_PORT:104}
+    storage-directory: ${DICOM_STORAGE_DIR:/tmp/dicom}
+    supported-transfer-syntaxes:
+      - "1.2.840.10008.1.2"        # Implicit VR Little Endian
+      - "1.2.840.10008.1.2.1"      # Explicit VR Little Endian
+      - "1.2.840.10008.1.2.2"      # Explicit VR Big Endian
+    timeout: ${DICOM_TIMEOUT:30000}
+    max-associations: ${DICOM_MAX_ASSOCIATIONS:10}
+  hl7:
+    encoding: ${HL7_ENCODING:UTF-8}
+    field-separator: ${HL7_FIELD_SEPARATOR:|}
+    component-separator: ${HL7_COMPONENT_SEPARATOR:^}
+    subcomponent-separator: ${HL7_SUBCOMPONENT_SEPARATOR:&}
+    repetition-separator: ${HL7_REPETITION_SEPARATOR:~}
+    escape-character: ${HL7_ESCAPE_CHARACTER:\}
+    message-timeout: ${HL7_MESSAGE_TIMEOUT:30000}
+    validation-strictness: ${HL7_VALIDATION_STRICTNESS:STANDARD}
+    supported-versions:
+      - "2.3"
+      - "2.4"
+      - "2.5"
+      - "2.5.1"
+      - "2.6"
+      - "2.7"
+      - "2.8"
+      - "2.8.1"
+      - "2.8.2"
+    acknowledgment:
+      mode: ${HL7_ACK_MODE:AL}  # AL=Always, NE=Never, ER=Error only, SU=Successful only
+      timeout: ${HL7_ACK_TIMEOUT:10000}
+      retry-attempts: ${HL7_ACK_RETRY_ATTEMPTS:3}
+
+# Kafka Topics
+kafka:
+  topics:
+    hospital-events: hospital.events
+    device-registrations: hospital.device.registrations
+    data-transfers: hospital.data.transfers
+    activity-tracking: hospital.activity.tracking
+
+# Spring Integration
+spring.integration:
+  poller:
+    fixed-delay: 5000
+    max-messages-per-poll: 10

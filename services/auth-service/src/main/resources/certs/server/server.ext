@@ -1,0 +1,15 @@
+authorityKeyIdentifier=keyid,issuer
+basicConstraints=CA:FALSE
+keyUsage = digitalSignature, nonRepudiation, keyEncipherment, dataEncipherment
+extendedKeyUsage = serverAuth
+subjectAltName = @alt_names
+
+[alt_names]
+DNS.1 = localhost
+DNS.2 = gateway
+DNS.3 = auth-service
+DNS.4 = patient-record-service
+DNS.5 = sync-service
+DNS.6 = audit-service
+DNS.7 = notification-service
+IP.1 = 127.0.0.1
