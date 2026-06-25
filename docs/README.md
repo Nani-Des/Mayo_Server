@@ -1,91 +1,159 @@
-# Mayo EMR Documentation Index
+# Mayo Server
 
-This document serves as the central index for all Mayo EMR project documentation. Documentation is organized by category for easy navigation.
+Modular Spring Boot backend for an EMR-style system. Multi-module Maven project (gateway + services + shared common modules) built for reactive APIs, service discovery, JWT auth, gRPC integration and cloud-native deployment patterns.
 
-## Table of Contents
+What this is
+- A multi-module Java 21 Spring Boot project that provides an API Gateway, domain services, shared libraries (core/security/events), and infrastructure/ops artifacts aimed at running an EMR backend (Postgres, Redis, Kafka, MinIO, etc.).
+- Designed for local development and deployment in containerized or orchestrated environments; supports reactive gateway, service discovery (Eureka), circuit-breaking (Resilience4j), gRPC, and OpenAPI docs.
 
-- [Architecture Documentation](#architecture-documentation)
-- [API Specifications](#api-specifications)
-- [Database Documentation](#database-documentation)
-- [Deployment Guides](#deployment-guides)
-- [Security Guidelines](#security-guidelines)
-- [Service Interaction Diagrams](#service-interaction-diagrams)
+Stack (high‑level)
+- Java 21, Spring Boot 3.4.x, Spring Cloud 2024.0.x
+- Build: Maven
+- Reactive gateway: Spring Cloud Gateway (Netty)
+- Service discovery: Eureka (Netflix)
+- Circuit breaker: Resilience4j
+- Storage & messaging: PostgreSQL, Redis, Kafka, MinIO
+- Security: JWT (jjwt)
+- gRPC: grpc-spring-boot-starter
+- Mapping: MapStruct
+- Observability: Spring Boot Actuator, springdoc OpenAPI
 
-## Architecture Documentation
+Repository layout (most important)
+```
+pom.xml                     # parent multi-module POM (modules: common, gateway, services)
+common/                     # shared modules (core, security, events)
+  core/
+  security/
+  events/
+gateway/                     # API Gateway (Spring Cloud Gateway)
+services/                    # domain services (auth, patient, records, etc.)
+database/                    # DB scripts / PLpgSQL (migrations or helpers)
+infrastructure/              # infra manifests / k8s / docker (cluster/dev helpers)
+ci-cd/                       # CI/CD pipelines / templates
+scripts/                     # helper scripts (local workflow)
+certs/                       # TLS certs / dev certs
+docs/                        # design docs, API notes
+.env.example                 # template for runtime environment variables
+```
 
-Core architectural documentation for the EMR system.
+Requirements
+- Java 21 (matching <java.version> in pom.xml)
+- Maven 3.8+ (or newer)
+- PostgreSQL (DB, port configurable)
+- Redis (reactive) for caching/session/state
+- Kafka (optional message bus)
+- MinIO (S3-compatible storage) or alternative object store
+- Docker (recommended for local infra)
+- Recommended: 8+ GB RAM for running a few services locally; more for full stack
 
-- [EMR Architecture Documentation](architecture/EMR_Architecture_Documentation.md) - Comprehensive overview of the EMR system architecture, including microservices design, data flow, and system components.
-- [Service Interaction Diagrams](architecture/Service_Interaction_Diagrams.md) - Visual diagrams showing interactions between services, data flows, and system integration points.
+Quick build (local dev)
+1. Clone and prepare Java/Maven:
+```
+git clone https://github.com/Nani-Des/Mayo_Server.git
+cd Mayo_Server
+# ensure JAVA_HOME points to a Java 21 JDK
+java -version
+mvn -v
+```
+2. Build all modules (skip tests for faster iteration):
+```
+mvn -T 1C clean install -DskipTests
+```
+- To build a single module (e.g., gateway) without building everything:
+```
+mvn -pl gateway -am clean package -DskipTests
+```
 
-## API Specifications
+Configuration (.env)
+- Copy the provided template and fill values:
+```
+cp .env.example .env
+# edit .env -> DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, JWT_SECRET, MINIO_ACCESS_KEY, etc.
+```
+- The project expects environment variables at runtime. For local shells you can export them:
+```
+export $(grep -v '^#' .env | xargs)
+```
+(If your .env contains comments or complex values, use a proper env loader like direnv or a process manager.)
 
-OpenAPI specifications for all microservices. Each service includes both YAML specification files and rendered Markdown documentation where available.
+Database setup
+- Create the database and user matching values in `.env` (DB_NAME, DB_USER, DB_PASSWORD).
+- The `database/` folder contains PL/pgSQL helper scripts; apply migrations or schema scripts as needed (project does not mandate a specific migration tool).
+- Example (psql):
+```
+psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE DATABASE mayo_db;"
+psql -h $DB_HOST -p $DB_PORT -U postgres -c "CREATE ROLE mayo WITH LOGIN PASSWORD 'mayo_dev_password'; GRANT ALL PRIVILEGES ON DATABASE mayo_db TO mayo;"
+```
 
-### Core Services
-- [Audit Service API](api/Audit_Service_API.yaml) | [Rendered](api/Audit_Service_API.md) - API specification for audit logging and compliance tracking.
-- [Auth Service API](api/Auth_Service_API.yaml) - Enhanced authentication and authorization with multi-factor support.
-- [Patient Record Service API](api/Patient_Record_Service_API.yaml) - Patient data management and record operations.
-- [Device Registry Service API](api/Device_Registry_Service_API.yaml) - Device pairing, registration, and management API.
-- [Sync Service API](api/Sync_Service_API.yaml) - Device synchronization and conflict resolution API.
+Run locally (individual modules)
+- API Gateway (dev):
+```
+# ensure env vars are exported
+cd gateway
+mvn spring-boot:run
+# or run packaged jar
+java -jar target/gateway-*.jar
+```
+- Services:
+```
+# start an individual service (example: services/auth)
+cd services/auth
+mvn spring-boot:run
+```
+Each service exposes its port per `.env` (GATEWAY_PORT, AUTH_SERVICE_PORT, etc.). Start discovery (Eureka) first if running a full set.
 
-### Integration Services
-- [Hospital Integration Service API](api/Hospital_Integration_Service_API.yaml) - External hospital system integration with HL7, FHIR, DICOM support.
-- [Notification Service API](api/Notification_Service_API.yaml) | [Rendered](api/Notification_Service_API.md) - Notification and alerting system API.
+Docker / infrastructure
+- The `infrastructure/` folder contains deployment artifacts (inspect for docker-compose or k8s manifests).
+- Recommended local approach:
+  - Start Postgres / Redis / Kafka / MinIO with docker-compose (or use local services).
+  - Export `.env` values to your shell.
+  - Start discovery (Eureka) if required, then start gateway and services.
 
-*Cross-reference: See [EMR Architecture Documentation](EMR_Architecture_Documentation.md) for service relationships and [Security Guidelines](Security_Guidelines.md) for API security requirements.*
+Testing
+- Unit tests:
+```
+mvn test
+```
+- Module-specific tests:
+```
+mvn -pl services/auth test
+```
 
-## Database Documentation
+Observability & API docs
+- OpenAPI UI (springdoc) is enabled — when the gateway/service is running, check `/swagger-ui.html` or `/v3/api-docs` on the service endpoint.
+- Actuator endpoints are available (health, metrics). Configure management.port and exposure via Spring properties or environment.
 
-Database schema and data model documentation.
+gRPC
+- gRPC server and client starters are included. If using gRPC:
+  - Ensure port bindings and proto-generated classes are available during build.
+  - Use the provided stubs or build tool to generate gRPC Java code if proto files are modified.
 
-- [Database Schema Documentation](database/Database_Schema_Documentation.md) - Complete database schema, table structures, relationships, and data migration information.
+Security notes
+- JWT_SECRET in `.env.example` is a placeholder — generate a secure secret for production (e.g., `openssl rand -base64 64`).
+- Follow secure practice for secrets (do not commit `.env` to VCS; use secret manager in production).
 
-*Cross-reference: Refer to [EMR Architecture Documentation](architecture/EMR_Architecture_Documentation.md) for data architecture patterns and [Security Guidelines](security/Security_Guidelines.md) for data protection requirements.*
+Common build/run tips & troubleshooting
+- Java compatibility: use the JDK version specified in `pom.xml` (21). Older JDKs will fail compilation.
+- MapStruct / Lombok: IDE may require annotation processing enabled to compile generated mappers locally.
+- If you see dependency resolution issues for Spring Cloud BOM or Py PI, run `mvn -U clean install`.
+- Build errors: the repo includes `build_error*.txt` files — inspect them if your build fails for clues.
+- If gateway fails to start due to service discovery timeouts, run Eureka/Discovery first or start gateway with `spring.cloud.discovery.enabled=false` for local single-service dev.
 
-## Deployment Guides
+Developer workflow suggestions
+- Use `mvn -T 1C` to parallelize builds.
+- For quick API iteration, run service locally with `mvn spring-boot:run` and `spring-boot-devtools`.
+- Use Docker Compose to boot dependent infra (Postgres/Redis/MinIO) in one command and keep app services running in local JVMs for faster code-edit cycles.
 
-Instructions for deploying and operating the EMR system.
+Project status
+- Active multi-module Spring Boot codebase (snapshot / in-development). Review CI/CD in `ci-cd/` for pipeline examples and `infrastructure/` for deployment patterns.
 
-- [Deployment Guide](deployment/Deployment_Guide.md) - Comprehensive deployment instructions, environment setup, and operational procedures.
+Where to look next (key files)
+- `pom.xml` — parent multi-module configuration and dependency management
+- `gateway/pom.xml` — gateway dependencies and runtime behavior
+- `common/` — shared modules (core/security/events)
+- `database/` — DB stored procedures and PL/pgSQL helpers
+- `.env.example` — required runtime environment variables and ports
+- `infrastructure/` & `ci-cd/` — deployment and pipeline templates
 
-*Cross-reference: See [EMR Architecture Documentation](architecture/EMR_Architecture_Documentation.md) for infrastructure requirements and [Security Guidelines](security/Security_Guidelines.md) for secure deployment practices.*
-
-## Security Guidelines
-
-Security policies, best practices, and compliance requirements.
-
-- [Security Guidelines](security/Security_Guidelines.md) - Security policies, encryption standards, access controls, and compliance frameworks.
-
-*Cross-reference: Referenced throughout API specifications and deployment guides for security implementation details.*
-
-## Service Interaction Diagrams
-
-Visual representations of service interactions and data flows.
-
-- [Service Interaction Diagrams](architecture/Service_Interaction_Diagrams.md) - Detailed diagrams of service communications, event flows, and integration patterns.
-
-*Cross-reference: See [EMR Architecture Documentation](architecture/EMR_Architecture_Documentation.md) for architectural context and API specifications for endpoint details.*
-
----
-
-## Quick Start
-
-For new developers or team members:
-1. Start with [EMR Architecture Documentation](architecture/EMR_Architecture_Documentation.md) for system overview
-2. Review [Database Schema Documentation](database/Database_Schema_Documentation.md) for data models
-3. Follow [Deployment Guide](deployment/Deployment_Guide.md) for local setup
-4. Consult [Security Guidelines](security/Security_Guidelines.md) for development practices
-5. Reference relevant API specifications for service integration
-
-## Contributing to Documentation
-
-When adding new documentation:
-- Place files in the appropriate category directory under `docs/`
-- Update this index with proper categorization and cross-references
-- Ensure links are relative and functional
-- Follow existing naming conventions
-
----
-
-*Last updated: 2025-12-03*
+Author
+- Nani-Des — https://github.com/Nani-Des
